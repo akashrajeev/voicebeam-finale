@@ -174,11 +174,15 @@ class AudioPipeline(
         var dfnStage="starting"
         Diagnostics.backend("stage=starting abi="+android.os.Build.SUPPORTED_ABIS.joinToString(",")+" sdk="+android.os.Build.VERSION.SDK_INT)
         var dfn: DfnHearing? = try { DfnHearing(app.assets) { dfnStage=it;Diagnostics.backend(it) }.also {
-            Diagnostics.backend("backend=DFN3 stage=native_ready frameBytes=960 attenDb=18 postFilterBeta=0 resamplerTaps=95 cutoffHz=7600 adapterDelayMs=16 firDelayMs=1.958 nonzero=fullwet off=raw_hearing_before_gate_costs_native")
+            Diagnostics.backend("backend=DFN3 stage=native_ready frameBytes=960 attenDb=32 postFilterBeta=0 resamplerTaps=95 cutoffHz=7600 adapterDelayMs=16 firDelayMs=1.958 nonzero=fullwet off=raw_hearing_before_gate_costs_native")
         } } catch (t: Throwable) {
             Diagnostics.backend("backend=GTCRN failed="+dfnStage+" error="+t.javaClass.simpleName+":"+t.message+" cause="+t.cause?.message)
             reportFallback("dfn_load_" + t.javaClass.simpleName); null
         }
+        val dfnStats=com.akashrajeev.voicebeam.core.HearingRuntimeStats()
+        var lastNativeFrames=0L
+        var lastPcmClips=0L
+        var lastSuspectScores=0L
         var dfnUs = 0L
         var clean = FloatArray(frameShift)
         var gated = FloatArray(frameShift)
@@ -232,6 +236,10 @@ class AudioPipeline(
                         try {
                             candidate.process(input).also {
                                 dfnUs = (SystemClock.elapsedRealtimeNanos() - start) / 1000
+                                dfnStats.batch(dfnUs)
+                                lastNativeFrames=candidate.nativeFrames
+                                lastPcmClips=candidate.clippedPcmInputs
+                                lastSuspectScores=candidate.suspectLsnrFrames
                                 require(dfnUs < 16000) { "DFN deadline" }
                             }
                         } catch (t: Throwable) {
@@ -294,6 +302,7 @@ class AudioPipeline(
                 // after headphones are connected. Only an ACTUAL headphone route receives speech.
                 val writeSpeech = monitorEnabled && headphoneRoute
                 val written = track?.write(MonitorOutput.samples(monitorEnabled, headphoneRoute, out, silence), 0, n, AudioTrack.WRITE_NON_BLOCKING)
+                if(written!=null && writeSpeech)dfnStats.write(written,n)
                 if (written != null && written < 0) error("Playback write failed: $written")
                 if (!routeLogged || lastRoute != routed?.id) {
                     Log.i("VoiceBeamAudio", "route type=" + routed?.type + " monitor=" + writeSpeech + " write=" + written)
@@ -332,8 +341,12 @@ class AudioPipeline(
                         " playbackUnderruns=" + track?.underrunCount +
                         " denoiseMix=" + denoiseMix + " hearingMix=" + mix + " hearingMixTarget=" + hearingMix.requested +
                         " hearingBackend=" + (if (dfn != null) "DFN3" else "GTCRN") + " dfnUs=" + dfnUs +
-                        " dfnLsnr=" + dfn?.lastLsnr + " dfnSuspectLsnrFrames=" + dfn?.suspectLsnrFrames +
-                        " dfnAttenDb=18 resamplerTaps=95 rumbleCutHz=80 denoiseFallbacks=" + denoiseFallback.count + " visionAgeMs=" + s.visionAgeMs +
+                        " dfnLsnr=" + dfn?.lastLsnr + " dfnSuspectLsnrFrames=" + lastSuspectScores +
+                        " dfnAllBatches=" + dfnStats.batches + " dfnAllP95UpperUs=" + dfnStats.p95UpperUs() +
+                        " dfnAllMaxUs=" + dfnStats.maxUs + " dfnDeadlineMisses=" + dfnStats.deadlineMisses +
+                        " dfnNativeFrames=" + lastNativeFrames + " dfnPcmClippedSamples=" + lastPcmClips +
+                        " playbackShortWrites=" + dfnStats.shortWrites + " playbackMissingSamples=" + dfnStats.missingWriteSamples +
+                        " dfnAttenDb=32 resamplerTaps=95 rumbleCutHz=80 denoiseFallbacks=" + denoiseFallback.count + " visionAgeMs=" + s.visionAgeMs +
                         " voiceQueue=" + voiceQueue.size + " droppedVoiceBlocks=" + voiceQueue.dropped +
                         " audioProcessUptimeMs=" + SystemClock.uptimeMillis() + " written=" + written +
                         " denoiseUs=" + (vadStart - denoiseStart) / 1000 +

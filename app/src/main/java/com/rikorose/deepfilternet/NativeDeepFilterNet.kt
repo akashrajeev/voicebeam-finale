@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 
 /** JNI signatures match Apache2 Kaleyra AndroidDeepFilterNet pinned native library. */
 class NativeDeepFilterNet(model: ByteArray) {
-    private var pointer = newNative(model, 18f).also { require(it != 0L) }
+    private var pointer = newNative(model, 32f).also { require(it != 0L) }
     val frameLength: Int get() = getFrameLengthNative(pointer).toInt()
     init { if(!setPostFilterBetaNative(pointer, 0f)) { close();error("DFN postfilter disable failed") } }
     fun process(buffer: ByteBuffer): Float {
