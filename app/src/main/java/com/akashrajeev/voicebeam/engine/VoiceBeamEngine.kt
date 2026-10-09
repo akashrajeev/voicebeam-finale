@@ -280,6 +280,7 @@ class VoiceBeamEngine(private val app: Context) {
             lifecycle.abortStart()
             workers.set(false)
             pipeline?.stop(); pipeline = null
+        synchronized(meterLock) { digitalStateMeter.reset() }
             throw t
         }
     }
@@ -292,9 +293,10 @@ class VoiceBeamEngine(private val app: Context) {
         audioOnly = false
         _state.update { it.copy(audioOnly = false) }
         pipeline?.stop(); pipeline = null
+        synchronized(meterLock) { digitalStateMeter.reset() }
         captionThread?.join(1500); voiceThread?.join(1500)
         captionThread = null; voiceThread = null
-        _state.update { it.copy(listening = false, partial = "", inputLevel = 0f, proofTelemetry = null) }
+        _state.update { it.copy(listening = false, partial = "", inputLevel = 0f, proofTelemetry = null, digitalMeter = com.akashrajeev.voicebeam.core.DigitalMeterSnapshot()) }
         lifecycle.finishStop()
     }
 
@@ -403,11 +405,19 @@ class VoiceBeamEngine(private val app: Context) {
         }
     }
 
+    private val digitalStateMeter = com.akashrajeev.voicebeam.core.DigitalStateMeter()
+    private val meterLock = Any()
+
     /** Stub bridge: no producer wired yet. Akash owns the AudioPipeline 1 Hz hook.
      * Immutable values only; call from diagnostics cadence, never per-frame UI updates.
      */
     fun acceptProofTelemetry(snapshot: com.akashrajeev.voicebeam.core.ProofTelemetry) {
-        _state.update { if (it.listening) it.copy(proofTelemetry = snapshot) else it }
+        synchronized(meterLock) {
+            if (_state.value.listening) {
+                val meter = digitalStateMeter.accept(snapshot)
+                _state.update { if (it.listening) it.copy(proofTelemetry = snapshot, digitalMeter = meter) else it }
+            }
+        }
     }
 
     fun clearCaptions() = _state.update { it.copy(segments = emptyList(), partial = "") }
