@@ -17,7 +17,8 @@ data class ProofTelemetry(
     val candidateRawFloor: Float?,
 )
 
-/** Shadow recommendations only. No method here returns audio, gain, boost or a gate decision. */
+/** Retired research hypothesis. No runtime consumers; retained for offline reproducibility.
+ * Shadow recommendations only. No method here returns audio, gain, boost or a gate decision. */
 class ShadowListeningPolicy {
     private var rawFloor: Float? = null
 
