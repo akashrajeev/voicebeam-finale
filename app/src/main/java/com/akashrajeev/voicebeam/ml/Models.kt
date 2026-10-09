@@ -146,3 +146,15 @@ class AudioModels private constructor(val asr: Asr, val denoiser: Denoiser, val 
         }
     }
 }
+
+
+/** Caption-only streaming DPDFNet-2, owned by caption worker, never audio thread. */
+class CaptionDenoiser(assets: AssetManager) {
+    private val impl = OnlineSpeechDenoiser(assetManager = assets,
+        config = OnlineSpeechDenoiserConfig(model = OfflineSpeechDenoiserModelConfig(
+            dpdfnet = com.k2fsa.sherpa.onnx.OfflineSpeechDenoiserDpdfNetModelConfig(
+                model = "models/dpdfnet2.onnx"), numThreads = 1)))
+    fun process(samples: FloatArray): FloatArray = impl.run(samples, SAMPLE_RATE).samples
+    fun reset() = impl.reset()
+    fun release() = impl.release()
+}
