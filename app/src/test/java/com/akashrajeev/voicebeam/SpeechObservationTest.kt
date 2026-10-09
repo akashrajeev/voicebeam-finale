@@ -26,9 +26,10 @@ class SpeechObservationTest {
         assertFalse(SpeechObservation.visionFresh(1500, 1600))
     }
     @Test fun lipsAloneNeverForceTargetBoost() {
-        val g=TargetGate();g.process(target())
+        val g=TargetGate()
+        repeat(5){g.process(target())} // settle hysteresis: UNCERTAIN
         assertEquals(TargetState.UNCERTAIN,g.state);assertFalse(g.boostAllowed)
-        g.process(target().copy(voiceActive=true))
+        repeat(5){g.process(target().copy(voiceActive=true))} // settle hysteresis: TARGET
         assertEquals(TargetState.TARGET,g.state);assertTrue(g.boostAllowed)
     }
 }

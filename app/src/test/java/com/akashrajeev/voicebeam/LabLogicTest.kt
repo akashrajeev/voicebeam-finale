@@ -7,12 +7,14 @@ import org.junit.Test
 class LabLogicTest {
     @Test fun otherVisualSpeakerVetoesFalseVoiceMatch() {
         val gate = TargetGate()
+        repeat(5) { gate.targetProbability(GateInputs(true, 0f, 0.9f, 1f, true)) } // settle hysteresis
         val p = gate.targetProbability(GateInputs(true, 0f, 0.9f, 1f, true))
         assertEquals(TargetState.OTHER, gate.state)
         assertEquals(0f, p, 0f)
     }
     @Test fun overlapIsNotPretendedToBeIsolated() {
         val gate = TargetGate()
+        repeat(5) { gate.targetProbability(GateInputs(true, 0.9f, 0.9f, 1f, true)) } // settle hysteresis
         assertEquals(0.5f, gate.targetProbability(GateInputs(true, 0.9f, 0.9f, 1f, true)), 0f)
         assertEquals(TargetState.OVERLAP, gate.state)
     }

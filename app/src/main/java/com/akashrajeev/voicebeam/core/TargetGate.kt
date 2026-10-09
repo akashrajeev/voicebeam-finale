@@ -30,9 +30,9 @@ enum class TargetState { UNLOCKED, TARGET, OTHER, UNCERTAIN, OVERLAP }
 
 class TargetGate(
     private val frameMs: Float = 10f,
-    private val attackMs: Float = 25f,
-    private val releaseMs: Float = 60f,
-    private val holdMs: Float = 300f,
+    private val attackMs: Float = 50f,
+    private val releaseMs: Float = 150f,
+    private val holdMs: Float = 200f,
 ) {
     var state: TargetState = TargetState.UNLOCKED
         private set
@@ -45,9 +45,11 @@ class TargetGate(
     private var hadLock = false
     var boostAllowed: Boolean = true
         private set
+    private var prevState: TargetState = TargetState.UNLOCKED
+    private var confirmStreak: Int = 0
 
     fun targetProbability(i: GateInputs): Float {
-        state = when {
+        val raw = when {
             !i.hasLock -> TargetState.UNLOCKED
             !i.voiceLearned -> TargetState.UNCERTAIN
             !i.audioOnly && !i.lockedVisible -> TargetState.UNCERTAIN
@@ -63,6 +65,21 @@ class TargetGate(
             !i.lockedVisible -> TargetState.UNCERTAIN
             (i.voiceMatch ?: 0f) > 0.8f && i.lockedSpeaking > 0.3f -> TargetState.TARGET
             else -> TargetState.UNCERTAIN
+        }
+        // Hysteresis: require 2 consecutive frames to confirm state change, preventing
+        // rapid oscillation when lip/VAD scores hover near thresholds.
+        state = if (raw != prevState) {
+            if (confirmStreak < 2) {
+                confirmStreak++
+                prevState // hold previous state for ~32ms debounce
+            } else {
+                confirmStreak = 0
+                prevState = raw
+                raw
+            }
+        } else {
+            confirmStreak = 0
+            raw
         }
         return when (state) {
             TargetState.UNLOCKED -> 1f
@@ -81,7 +98,7 @@ class TargetGate(
 
     fun process(i: GateInputs): Float {
         // A new lock must not inherit the open, boosted UNLOCKED monitor.
-        if (i.hasLock && !hadLock) { gain = 1f; probability = 0f; holdLeft = 0f }
+        if (i.hasLock && !hadLock) { gain = 1f; probability = 0f; holdLeft = 0f; confirmStreak = 0; prevState = TargetState.UNLOCKED }
         hadLock = i.hasLock
         val p = targetProbability(i)
         if (!i.hasLock) {
@@ -90,23 +107,43 @@ class TargetGate(
             probability = p
             holdLeft = if (state == TargetState.TARGET) holdMs else 0f
         } else {
+            // Hold re-evaluation: if someone else's lips are moving during the hold,
+            // release it early — the silent post-target tail shouldn't pass another speaker.
+            if (holdLeft > 0f && i.othersSpeaking > 0.55f) {
+                holdLeft = 0f
+            }
             holdLeft = (holdLeft - frameMs).coerceAtLeast(0f)
-            // A short gap may hold the last target turn. It must expire, not retain .95 forever.
-            if (holdLeft <= 0f) probability = 0f
+            // Smooth hold release: ramp probability down over ~100ms instead of
+            // dropping 0.95->0 instantly, which caused an audible ambient suck-out.
+            if (holdLeft <= 0f) {
+                val releaseRampFrames = 6 // ~96ms at 16ms/frame
+                val rampRemaining = maxOf(0f, (-holdLeft) / (releaseRampFrames * frameMs))
+                probability = (probability * rampRemaining).coerceAtLeast(0f)
+                if (holdLeft > -releaseRampFrames * frameMs - 1f) {
+                    holdLeft -= frameMs
+                }
+            }
         }
         val confirmed = !i.hasLock || ((i.audioOnly || i.lockedVisible) &&
             ((i.voiceLearned && i.voiceActive && state == TargetState.TARGET) ||
                 (i.voiceLearned && !i.voiceActive && holdLeft > 0f)))
         boostAllowed = confirmed
         val strength = quietOthers.coerceIn(0f, 1f)
-        // Squared residual gives useful suppression despite proximity to the phone mic.
-        // At80% residual is4%; max attenuation keeps2% to avoid completely lost speech.
-        val residual = maxOf(0.02f, (1f - strength) * (1f - strength))
+        // Linear residual: 1 - 0.98*strength gives usable range 0..1 instead of
+        // the old squared curve that saturated past 0.8, destroying dynamic control.
+        val residual = maxOf(0.02f, 1f - strength * 0.98f)
         val wanted = when {
             !i.hasLock -> 1f
             confirmed -> 1f - strength * (1f - probability)
-            state == TargetState.UNCERTAIN -> 1f // safe unboosted enhancement passthrough
-            state == TargetState.OVERLAP && i.voiceActive -> 1f // cannot separate, preserve speech
+            // UNCERTAIN when locked: duck to half the gap between residual and 1.0.
+            // At 0.94 suppression this is ~0.51 (-6dB), reducing bleed-through
+            // without fully muting the target during brief ambiguous frames.
+            state == TargetState.UNCERTAIN && i.hasLock ->
+                residual + (1f - residual) * 0.5f
+            // OVERLAP + voiceActive: half gain (-6dB) instead of full open.
+            // The scalar gate can't separate, but it can reduce the mixed volume
+            // rather than passing both voices unattenuated.
+            state == TargetState.OVERLAP && i.voiceActive -> 0.5f
             else -> residual
         }
         val tau = if (wanted > gain) attackMs else releaseMs
@@ -117,7 +154,7 @@ class TargetGate(
 
     fun reset() {
         state = TargetState.UNLOCKED; probability = 1f; gain = 1f; holdLeft = 0f
-        hadLock = false; boostAllowed = true
+        hadLock = false; boostAllowed = true; confirmStreak = 0; prevState = TargetState.UNLOCKED
     }
 
     companion object {

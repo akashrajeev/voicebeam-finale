@@ -134,15 +134,21 @@ class CoreTest {
 
     @Test fun hiddenLockedFaceDoesNotOpenForUnknownSpeech() {
         val g = TargetGate()
+        repeat(5) { g.targetProbability(GateInputs(true, 0f, 0f, null, true, lockedVisible = false)) } // settle hysteresis
         val p = g.targetProbability(GateInputs(true, 0f, 0f, null, true, lockedVisible = false))
         assertEquals(0f, p, 0f)
     }
 
     @Test fun audioOnlyNeverUsesStaleLipOrUnverifiedVoice() {
         val gate = TargetGate()
+        repeat(5) { gate.targetProbability(GateInputs(true, 0.99f, 0f, null, true, audioOnly = true)) }
         assertEquals(0f, gate.targetProbability(GateInputs(true, 0.99f, 0f, null, true, audioOnly = true)), 0.001f)
-        assertEquals(0.1f, gate.targetProbability(GateInputs(true, 0.99f, 0.99f, 0.1f, true, audioOnly = true)), 0.001f)
-        assertEquals(0.91f, gate.targetProbability(GateInputs(true, 0f, 0f, 0.91f, true, audioOnly = true)), 0.001f)
+        val gate2 = TargetGate()
+        repeat(5) { gate2.targetProbability(GateInputs(true, 0.99f, 0.99f, 0.1f, true, audioOnly = true)) }
+        assertEquals(0.1f, gate2.targetProbability(GateInputs(true, 0.99f, 0.99f, 0.1f, true, audioOnly = true)), 0.001f)
+        val gate3 = TargetGate()
+        repeat(5) { gate3.targetProbability(GateInputs(true, 0f, 0f, 0.91f, true, audioOnly = true)) }
+        assertEquals(0.91f, gate3.targetProbability(GateInputs(true, 0f, 0f, 0.91f, true, audioOnly = true)), 0.001f)
     }
 
     @Test fun voiceMatchScores() {

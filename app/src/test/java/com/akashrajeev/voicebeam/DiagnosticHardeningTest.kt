@@ -12,7 +12,7 @@ class DiagnosticHardeningTest {
         assertNull(d.sample { true })
         assertEquals(1, errors)
         val gate = TargetGate()
-        gate.process(GateInputs(true, .9f, 0f, null, true))
+        repeat(5) { gate.process(GateInputs(true, .9f, 0f, null, true)) } // settle hysteresis
         assertEquals(TargetState.TARGET, gate.state)
     }
     @Test fun inferenceFailureDisablesDiagnosticAndReleasesOnce() {
@@ -47,7 +47,7 @@ class DiagnosticHardeningTest {
         assertEquals(false, cleanSpeech)
         val observation = SpeechObservation.observe(false, true, .06f,
             GateInputs(true, .9f, 0f, null, false))
-        val gate = TargetGate(); gate.process(observation.inputs)
+        val gate = TargetGate(); repeat(5) { gate.process(observation.inputs) } // settle hysteresis
         assertEquals(TargetState.TARGET, gate.state); assertTrue(gate.boostAllowed)
         val queue = DropOldestQueue<Pair<FloatArray, Float>>(2)
         val raw = floatArrayOf(.06f, .07f)
@@ -60,7 +60,7 @@ class DiagnosticHardeningTest {
     @Test fun fallbackFeedsQueryWithoutOverridingFalseRawVad() {
         val o = SpeechObservation.observe(false, false, .06f,
             GateInputs(true, .9f, 0f, null, false))
-        val g = TargetGate(); g.process(o.inputs)
+        val g = TargetGate(); repeat(5) { g.process(o.inputs) } // settle hysteresis
         val q = DropOldestQueue<Pair<FloatArray, Float>>(2)
         SpeechObservation.enqueue(o, floatArrayOf(.06f), q)
         assertEquals(1, q.size); assertEquals(TargetState.UNCERTAIN, g.state)
