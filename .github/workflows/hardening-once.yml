@@ -1,0 +1,42 @@
+name: ENH7 approved hardening validation
+# Manual approval per run. Source-only edits cannot silently skip validation:
+  push:
+    branches: [fix/diagnostic-callback-hardening]
+    paths: ['.github/workflows/hardening-once.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Fetch public models
+        run: bash scripts/fetch_models.sh
+      - name: Unit tests and debug APK
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
+      - name: Report validation (no release or artifact publication)
+        run: |
+          git rev-parse HEAD
+          sha256sum app/build/outputs/apk/debug/app-debug.apk
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as E
+          roots = [E.parse(p).getroot() for p in glob.glob('app/build/test-results/testDebugUnitTest/*.xml')]
+          tests = sum(int(r.attrib['tests']) for r in roots)
+          failures = sum(int(r.attrib.get('failures', '0')) + int(r.attrib.get('errors', '0')) for r in roots)
+          assert roots and failures == 0
+          print(f'{tests} JVM tests; {failures} failures/errors. Debug APK built. Phone test separate.')
+          PY
+      - name: Upload candidate APK (one-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardening-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 1
+          if-no-files-found: error
