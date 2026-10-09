@@ -43,10 +43,9 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     val context = LocalContext.current
-    var proofClockMs by remember { mutableStateOf(android.os.SystemClock.elapsedRealtime()) }
     var diagnosticText by remember { mutableStateOf(Diagnostics.snapshot()) }
     LaunchedEffect(Unit) {
-        while (true) { diagnosticText = Diagnostics.snapshot(); proofClockMs = android.os.SystemClock.elapsedRealtime(); delay(1000) }
+        while (true) { diagnosticText = Diagnostics.snapshot(); delay(1000) }
     }
     val s by engine.settings.collectAsState()
     val state by engine.state.collectAsState()
@@ -87,11 +86,6 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             Text("Start Learn my voice on the listening screen so the microphone stays active.", color = Muted, fontSize = 12.sp)
             SwitchRow("Veto high-confidence wearer voice", "Off by default. May block a similar target; requires target voice learned too.", state.wearerVetoEnabled) { engine.setWearerVeto(it) }
             Button(onClick = { engine.clearWearerVoice() }) { Text("Clear my voice") }
-            SectionHeader("Listening evidence")
-            ProofPanel(state.proofTelemetry,
-                stale = !state.listening || state.proofTelemetry?.let {
-                    proofClockMs - it.sampledAtMs > 2500
-                } == true)
             SectionHeader("Live diagnostics")
             Text("Local technical logs only. No audio, captions or uploads. Share sends a text file only when you choose an app.", color = Muted, fontSize = 12.sp)
             Row {
