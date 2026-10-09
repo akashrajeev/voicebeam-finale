@@ -1,5 +1,6 @@
 name: ENH7 approved hardening validation
-# Manual approval per run. Source-only edits cannot silently skip validation:
+# One approved validation run; no release publication.
+on:
   push:
     branches: [fix/diagnostic-callback-hardening]
     paths: ['.github/workflows/hardening-once.yml']
