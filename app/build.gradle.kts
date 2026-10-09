@@ -20,8 +20,8 @@ android {
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 114
-        versionName = "ENH-exp-ver5"
+        versionCode = 115
+        versionName = "ENH-exp-ver6-offline-extract"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
@@ -72,6 +72,7 @@ android {
 }
 
 dependencies {
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation(files("libs/sherpa-onnx.aar"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")

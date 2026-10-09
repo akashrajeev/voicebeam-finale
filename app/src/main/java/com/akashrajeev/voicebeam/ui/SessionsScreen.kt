@@ -109,7 +109,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                         if (expanded == m.id) {
                             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (m.video.exists()) Chip("▶ Play video", color = Card2) { openFile(context, m.video, "video/mp4") }
-                                if (m.cleanAudio.exists()) Chip(if (playing == m.id + "c") "■ Stop" else "▶ Clean", color = Card2) { play(m.cleanAudio, m.id + "c") }
+                                if (m.cleanAudio.exists()) Chip(if (playing == m.id + "c") "■ Stop" else if (java.io.File(m.dir,"extracted.wav").exists()) "▶ Extracted (offline)" else "▶ Clean", color = Card2) { play(m.cleanAudio, m.id + "c") }
                                 if (m.rawWav.exists()) Chip(if (playing == m.id + "r") "■ Stop" else "▶ Raw", color = Card2) { play(m.rawWav, m.id + "r") }
                             }
                             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -163,7 +163,7 @@ private fun openFile(context: Context, f: File, mime: String) {
 }
 
 private fun share(context: Context, m: SessionMeta) {
-    val files = listOf(m.video, m.cleanAudio, m.srt, m.txt, m.rawWav).filter { it.exists() && it.length() > 0 }
+    val files = listOf(m.video, m.cleanAudio, m.srt, m.txt, m.rawWav, java.io.File(m.dir,"enhanced-original.wav"), java.io.File(m.dir,"extracted.wav")).filter { it.exists() && it.length() > 0 }
     if (files.isEmpty()) return
     val uris = ArrayList(files.map { uriFor(context, it) })
     val i = Intent(Intent.ACTION_SEND_MULTIPLE).apply {

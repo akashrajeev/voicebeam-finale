@@ -103,6 +103,9 @@ class VoiceBeamEngine(private val app: Context) {
     private var recStartCaptionMs = 0L
     private var recSegments = mutableListOf<CaptionSegment>()
     private var recDir: File? = null
+    private var recExtractionReference: FloatArray? = null
+    private var recKeepRaw = false
+    private var recExtractionLock: Int? = null
     private var recId: String? = null
 
     init {
@@ -153,7 +156,7 @@ class VoiceBeamEngine(private val app: Context) {
     fun lockAt(nx: Float, ny: Float): Boolean {
         val prev = tracker.lockedId
         val id = tracker.lockAt(nx, ny, SystemClock.uptimeMillis())
-        if (id != prev) { learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L }
+        if (id != prev) { recExtractionReference = null; learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L }
         _state.update { it.copy(lockedId = id, voiceLearned = learner?.learned == true,
             voiceMatch = latestVoiceMatch, voiceEnrollmentActive = learner?.enrollmentEnabled == true,
             voiceEnrollmentProgress = learner?.progress ?: 0f) }
@@ -202,7 +205,7 @@ class VoiceBeamEngine(private val app: Context) {
     }
 
     fun unlock() {
-        audioOnly = false; tracker.unlock(); learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
+        recExtractionReference = null; audioOnly = false; tracker.unlock(); learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
         _state.update { it.copy(lockedId = null, voiceLearned = false, voiceMatch = null, voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
     }
 
@@ -481,9 +484,12 @@ class VoiceBeamEngine(private val app: Context) {
         recSegments = mutableListOf()
         recStartCaptionMs = assembler.nowMs
         val keepRaw = _settings.value.keepRawAudio
+        recKeepRaw = keepRaw
+        recExtractionLock = tracker.lockedId
+        recExtractionReference = learner?.extractionReference?.copyOf().takeIf { learner?.learned == true }
         if (mode != SaveMode.CAPTIONS) {
             p.cleanWriter = WavWriter(File(dir, "clean.wav"), SAMPLE_RATE)
-            if (keepRaw) p.rawWriter = WavWriter(File(dir, "raw.wav"), SAMPLE_RATE)
+            if (keepRaw || recExtractionReference != null) p.rawWriter = WavWriter(File(dir, "raw.wav"), SAMPLE_RATE)
         }
         val effectiveMode = if (mode == SaveMode.AUDIO_VIDEO && (!videoBound || videoCapture == null)) SaveMode.AUDIO else mode
         if (effectiveMode == SaveMode.AUDIO_VIDEO) {
@@ -507,6 +513,8 @@ class VoiceBeamEngine(private val app: Context) {
         val dir = recDir ?: return
         val id = recId ?: return
         val durationMs = SystemClock.elapsedRealtime() - rec.startedAtMs
+        val extractionRef = recExtractionReference?.copyOf().takeIf { tracker.lockedId == recExtractionLock && learner?.learned == true }; recExtractionReference = null
+        val keepRawAfter = recKeepRaw
         val clean = p?.cleanWriter; val raw = p?.rawWriter
         p?.cleanWriter = null; p?.rawWriter = null
         clean?.close(); raw?.close()
@@ -529,18 +537,34 @@ class VoiceBeamEngine(private val app: Context) {
                 SaveMode.AUDIO -> "srt"
             }
             val meta = SessionMeta(id, defaultTitle(), System.currentTimeMillis(), durationMs, rec.mode, capLabel, dir)
+            var extractionNote = ""
+            var exportWav = meta.cleanWav
             try {
+                if (rec.mode != SaveMode.CAPTIONS && extractionRef != null) {
+                    _state.update { it.copy(recording = it.recording.copy(lastMessage = "Extracting recording offline (live audio unchanged)...")) }
+                    try {
+                        val ms = com.akashrajeev.voicebeam.separation.OfflineSpeakerBeam.extract(app,meta.rawWav,extractionRef,File(dir,"extracted.wav"))
+                        meta.cleanWav.copyTo(File(dir,"enhanced-original.wav"),overwrite=true)
+                        exportWav = File(dir,"extracted.wav")
+                        extractionNote = " - offline extracted, quality unverified"
+                        Diagnostics.event("offline_tse=success ms="+ms+" samples16k="+durationMs*16)
+                    } catch (t: Throwable) {
+                        File(dir,"extracted.wav").delete()
+                        extractionNote = " - extraction failed, enhanced fallback"
+                        Diagnostics.event("offline_tse=fallback error="+t.javaClass.simpleName+":"+t.message)
+                    }
+                } else if(rec.mode != SaveMode.CAPTIONS) extractionNote = " - no extraction: learn target voice first"
                 when (rec.mode) {
                     SaveMode.AUDIO -> {
-                        MediaExporter.wavToM4a(meta.cleanWav, meta.cleanAudio)
+                        MediaExporter.wavToM4a(exportWav, meta.cleanAudio)
                         message = "Saved clean audio"
                     }
                     SaveMode.AUDIO_VIDEO -> {
                         val cam = videoDone?.await(15_000)
-                        MediaExporter.wavToM4a(meta.cleanWav, meta.cleanAudio)
+                        MediaExporter.wavToM4a(exportWav, meta.cleanAudio)
                         if (cam != null && cam.exists() && cam.length() > 0) {
                             val merged = File(dir, "merged.mp4")
-                            MediaExporter.muxVideoWithWav(cam, meta.cleanWav, merged)
+                            MediaExporter.muxVideoWithWav(cam, exportWav, merged)
                             if (burn == CaptionBurn.BURNED && segs.isNotEmpty()) {
                                 try {
                                     MediaExporter.burnCaptions(app, merged, meta.video, segs)
@@ -562,6 +586,8 @@ class VoiceBeamEngine(private val app: Context) {
                 Log.e(TAG, "export failed", t)
                 message = "Saved with problems: ${t.message}"
             }
+            if (!keepRawAfter) meta.rawWav.delete()
+            message += extractionNote
             sessions.writeMeta(meta, segs)
             refreshSessions()
             _state.update { it.copy(recording = it.recording.copy(exporting = false, lastMessage = message)) }

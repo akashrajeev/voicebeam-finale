@@ -48,3 +48,5 @@ mkdir -p app/src/main/jniLibs/arm64-v8a
 [ -f app/src/main/jniLibs/arm64-v8a/libdf.so ] || curl -fL -o app/src/main/jniLibs/arm64-v8a/libdf.so "$DFN_BASE/main/jniLibs/arm64-v8a/libdf.so"
 printf '%s\n' '5600b6857117ecc7cf460b8ec4841963bfa6d718921d424d42dea5d3d37a8c32  app/src/main/assets/models/dfn3-mobile.bin' | sha256sum -c -
 printf '%s\n' '0ec8bc3971bbb8a804b4b53910e8cad3626b9db6b4c44167eba9b669f58f0584  app/src/main/jniLibs/arm64-v8a/libdf.so' | sha256sum -c -
+# Offline SpeakerBeam is committed as a pinned single-file ONNX, never silently skipped.
+printf '%s\n' 'e9bdb6c0a8e51b8341435f49abe59ead136cd2b9d6b6c178990fdc50bf54c9eb  app/src/main/assets/models/speakerbeam-8k.onnx' | sha256sum -c -

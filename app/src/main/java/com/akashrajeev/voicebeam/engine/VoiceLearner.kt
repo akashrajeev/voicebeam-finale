@@ -21,6 +21,8 @@ class VoiceLearner(
     private var querySinceScore = 0
     private var queryHasScore = false
     val querySamplesBuffered: Int get() = scoreFill
+    @Volatile var extractionReference: FloatArray? = null
+        private set
     private val prints = mutableListOf<FloatArray>()
     @Volatile var lastQueryEmbedding: FloatArray? = null
         private set
@@ -55,6 +57,7 @@ class VoiceLearner(
                     if (kotlin.math.sqrt(energy / enrollBuf.size) >= .005) {
                         val embedding = validEmbedding(embed(enrollBuf.copyOf()))
                         if (embedding != null && (prints.isEmpty() || embedding.size == prints[0].size)) {
+                            if (extractionReference == null) extractionReference = enrollBuf.copyOf()
                             prints.add(embedding); enrollmentMessage = "Captured ${prints.size}/$needed phrases"
                         } else enrollmentMessage = "Embedding failed: try again"
                     } else enrollmentMessage = "Too quiet: move closer and speak alone"
@@ -103,5 +106,5 @@ class VoiceLearner(
     }
 
     @Synchronized
-    fun reset() { enrollmentMessage="Voice not learned (cleared/interrupted)"; lastQueryEmbedding = null; enrollmentEnabled = false; prints.clear(); centroid = null; enrollFill = 0; scoreFill = 0; querySinceScore = 0; queryHasScore = false }
+    fun reset() { enrollmentMessage="Voice not learned (cleared/interrupted)"; lastQueryEmbedding = null; enrollmentEnabled = false; prints.clear(); extractionReference = null; centroid = null; enrollFill = 0; scoreFill = 0; querySinceScore = 0; queryHasScore = false }
 }
