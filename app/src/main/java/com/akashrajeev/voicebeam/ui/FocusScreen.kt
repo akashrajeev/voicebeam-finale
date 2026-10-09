@@ -258,6 +258,8 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     Text("ENH-7 | Enhanced listening", color = Color.White, fontSize = 12.sp)
                     Text(engine.enrollmentMessage(), color = Color.White, fontSize = 12.sp)
                 }
+                // experiment-1 measurement HUD only. Pipeline fields remain pending hook.
+                ProofPanel(state, settings)
                 StatusLine(state.lockedId != null, state.lockedSpeaking, state.voiceLearned, state.voiceMatch) { engine.unlock() }
                 if (state.wearerEnrollmentActive) {
                     Text("Learning YOUR voice ${(state.wearerEnrollmentProgress * 100).roundToInt()}%: only you speak. Target learning paused.", color = Muted, fontSize = 12.sp)
