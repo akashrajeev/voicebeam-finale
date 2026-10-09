@@ -38,3 +38,13 @@ mkdir -p app/src/androidTest/assets
 [ -f app/src/androidTest/assets/noisy_speech.wav ] || curl -fL -o app/src/androidTest/assets/noisy_speech.wav "$REL/speech-enhancement-models/speech_with_noise.wav" || true
 
 ls -la "$ASSETS" "$ASSETS/asr"
+
+# Experimental DFN3 mobile binary/model, pinned Apache2 Android wrapper release source.
+# No runtime downloads. Verify bytes before packaging.
+DFN_REV=9fff40b97bb8754afe6530ffdc234cb15b8d32da
+DFN_BASE=https://raw.githubusercontent.com/KaleyraVideo/AndroidDeepFilterNet/$DFN_REV/noise-filter/src
+mkdir -p app/src/main/jniLibs/arm64-v8a
+[ -f "$ASSETS/dfn3-mobile.tar.gz" ] || curl -fL -o "$ASSETS/dfn3-mobile.tar.gz" "$DFN_BASE/bundledModel/res/raw/deep_filter_mobile_model"
+[ -f app/src/main/jniLibs/arm64-v8a/libdf.so ] || curl -fL -o app/src/main/jniLibs/arm64-v8a/libdf.so "$DFN_BASE/main/jniLibs/arm64-v8a/libdf.so"
+printf '%s\n' '5600b6857117ecc7cf460b8ec4841963bfa6d718921d424d42dea5d3d37a8c32  app/src/main/assets/models/dfn3-mobile.tar.gz' | sha256sum -c -
+printf '%s\n' '0ec8bc3971bbb8a804b4b53910e8cad3626b9db6b4c44167eba9b669f58f0584  app/src/main/jniLibs/arm64-v8a/libdf.so' | sha256sum -c -

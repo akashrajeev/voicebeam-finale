@@ -171,6 +171,12 @@ class AudioPipeline(
                 catch (_: Throwable) {} // optional telemetry must never stop hearing
             }
         }
+        var dfn: DfnHearing? = try { DfnHearing(app.assets).also {
+            Diagnostics.event("hearingBackend=DFN3 nativeHop48k=480 adapterDelayMs=16")
+        } } catch (t: Throwable) {
+            reportFallback("dfn_load_" + t.javaClass.simpleName); null
+        }
+        var dfnUs = 0L
         var clean = FloatArray(frameShift)
         var gated = FloatArray(frameShift)
         var out = FloatArray(frameShift)
@@ -217,7 +223,21 @@ class AudioPipeline(
                 System.arraycopy(input, 0, denoiseIn, 0, input.size)
                 alignment.push(input)
                 val denoised = try {
-                    val result = models.denoiser.process(denoiseIn)
+                    val start = SystemClock.elapsedRealtimeNanos()
+                    val candidate = dfn
+                    val result = if (candidate != null) {
+                        try {
+                            candidate.process(input).also {
+                                dfnUs = (SystemClock.elapsedRealtimeNanos() - start) / 1000
+                                require(dfnUs < 16000) { "DFN deadline" }
+                            }
+                        } catch (t: Throwable) {
+                            try { candidate.close() } catch (_: Throwable) {}
+                            dfn = null; models.denoiser.reset(); alignment.reset(); alignment.push(input)
+                            reportFallback("dfn_process_" + t.javaClass.simpleName)
+                            models.denoiser.process(denoiseIn)
+                        }
+                    } else models.denoiser.process(denoiseIn)
                     if (!com.akashrajeev.voicebeam.core.DenoiseOutput.valid(result, input.size)) {
                         reportFallback("invalid_output")
                         alignment.reset(); alignment.push(input); input
@@ -246,8 +266,9 @@ class AudioPipeline(
                 val g = gate.process(observation.inputs)
                 val gateEnd = SystemClock.elapsedRealtimeNanos()
                 // Use the existing aligned dry branch. Policy changes hearing, not attribution.
-                val mix = hearingMix.next(denoiseMix, observation.inputs, gate.state, n)
+                val mix = if (dfn != null && denoiseMix > 0f) 1f else hearingMix.next(denoiseMix, observation.inputs, gate.state, n)
                 alignment.mix(denoised, mix, clean, n)
+                if (dfn != null && denoiseMix == 0f) input.copyInto(clean, endIndex=n)
                 val cleanVadStart = SystemClock.elapsedRealtimeNanos()
                 val cleanVadProbability = cleanVad.sample {
                     it.isVoice(clean.let { if (it.size == n) it else it.copyOf(n) })
@@ -306,6 +327,7 @@ class AudioPipeline(
                         " queryFallback=" + (!voice && observation.queryWeight != null) +
                         " playbackUnderruns=" + track?.underrunCount +
                         " denoiseMix=" + denoiseMix + " hearingMix=" + mix + " hearingMixTarget=" + hearingMix.requested +
+                        " hearingBackend=" + (if (dfn != null) "DFN3" else "GTCRN") + " dfnUs=" + dfnUs +
                         " rumbleCutHz=80 denoiseFallbacks=" + denoiseFallback.count + " visionAgeMs=" + s.visionAgeMs +
                         " voiceQueue=" + voiceQueue.size + " droppedVoiceBlocks=" + voiceQueue.dropped +
                         " audioProcessUptimeMs=" + SystemClock.uptimeMillis() + " written=" + written +
@@ -330,6 +352,7 @@ class AudioPipeline(
                 }
             }
         } finally {
+            try { dfn?.close() } catch (_: Throwable) {}
             try { rec?.stop() } catch (_: Throwable) {}
             rec?.release()
             try { track?.stop() } catch (_: Throwable) {}
