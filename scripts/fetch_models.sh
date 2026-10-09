@@ -27,9 +27,9 @@ fi
 # 2. Speech enhancement (GTCRN, ~0.5 MB)
 [ -f "$ASSETS/gtcrn.onnx" ] || curl -fL -o "$ASSETS/gtcrn.onnx" "$REL/speech-enhancement-models/gtcrn_simple.onnx"
 
-# 3. Speaker embedding (TitaNet Small English, lab trial)
-SPEAKER_ASSET=${VB_SPEAKER_ASSET:-speaker.onnx}
-SPEAKER_URL=${VB_SPEAKER_URL:-$REL/speaker-recongition-models/nemo_en_titanet_small.onnx}
+# 3. Speaker embedding (CAM++ zh_en advanced, untuned A/B candidate)
+SPEAKER_ASSET=${VB_SPEAKER_ASSET:-campplus_advanced.onnx}
+SPEAKER_URL=${VB_SPEAKER_URL:-$REL/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx}
 [ -f "$ASSETS/$SPEAKER_ASSET" ] || curl -fL -o "$ASSETS/$SPEAKER_ASSET" "$SPEAKER_URL"
 
 # 4. Face + lip landmarks (MediaPipe Face Landmarker)
