@@ -13,7 +13,7 @@ android {
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + (System.getenv("GITHUB_SHA") ?: "local") + "\"")
-        versionCode = 106
+        versionCode = 107
         versionName = "ENH-7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

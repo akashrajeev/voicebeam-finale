@@ -66,6 +66,7 @@ class AudioPipeline(
     val voiceQueue = DropOldestQueue<Pair<FloatArray, Float>>(VOICE_BACKLOG_BLOCKS)
 
     private val gate = TargetGate(frameMs = (models.denoiser.frameShift.takeIf { it > 0 } ?: 256) * 1000f / SAMPLE_RATE)
+    private val cleanVad = com.akashrajeev.voicebeam.ml.NeuralVad(app.assets)
     private val vad = com.akashrajeev.voicebeam.ml.NeuralVad(app.assets)
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
@@ -75,7 +76,7 @@ class AudioPipeline(
     fun start(useSceneMic: Boolean) {
         if (running.getAndSet(true)) return
         Diagnostics.event("audio_start sceneMic=" + useSceneMic)
-        capturedSamples = 0L; asrQueue.clear(); voiceQueue.clear(); vad.reset()
+        capturedSamples = 0L; asrQueue.clear(); voiceQueue.clear(); vad.reset(); cleanVad.reset()
         thread = Thread({
             try { loop(useSceneMic) }
             catch (t: Throwable) {
@@ -85,6 +86,7 @@ class AudioPipeline(
             } finally {
                 running.set(false)
                 try { vad.release() } catch (_: Throwable) {}
+                try { cleanVad.release() } catch (_: Throwable) {}
             }
         }, "vb-audio").also { it.start() }
     }
@@ -217,7 +219,10 @@ class AudioPipeline(
                 alignment.mix(denoised, mix, clean, n)
 
                 val vadStart = SystemClock.elapsedRealtimeNanos()
-                val voice = vad.isVoice(clean.let { if (it.size == n) it else it.copyOf(n) })
+                // Identity/detection sees the same raw mic as enrollment, not hearing denoise.
+                val voice = vad.isVoice(input)
+                cleanVad.isVoice(clean.let { if (it.size == n) it else it.copyOf(n) })
+                val rawRms = rmsForCaption(input)
                 val gateStart = SystemClock.elapsedRealtimeNanos()
                 val s = signals()
                 gate.quietOthers = quietOthers
@@ -268,7 +273,10 @@ class AudioPipeline(
                         " voiceMatch=" + s.voiceMatch + " wearerMatch=" + s.wearerMatch + " wearerVeto=" + s.wearerVetoEnabled + " boostAllowed=" + gate.boostAllowed +
                         " appliedBoost=" + boost +
                         " gate=" + gate.state + " gain=" + g + " probability=" + gate.probability +
-                        " vad=" + voice + " written=" + written +
+                        " vad=" + voice + " rawVadProb=" + vad.probability + " cleanVadProb=" + cleanVad.probability +
+                        " denoiseMix=" + denoiseMix + " visionAgeMs=" + s.visionAgeMs +
+                        " voiceQueue=" + voiceQueue.size + " droppedVoiceBlocks=" + voiceQueue.dropped +
+                        " audioProcessUptimeMs=" + SystemClock.uptimeMillis() + " written=" + written +
                         " denoiseUs=" + (vadStart - denoiseStart) / 1000 +
                         " vadUs=" + (gateStart - vadStart) / 1000 +
                         " gateUs=" + (playStart - gateStart) / 1000 +
@@ -282,7 +290,7 @@ class AudioPipeline(
                 // Assign a caption to the target separately using the gate probability.
                 if (enrollmentActive()) {
                     voiceQueue.offer(Pair(input.copyOf(), 1f))
-                } else if (voice) {
+                } else if (com.akashrajeev.voicebeam.core.SpeechObservation.queryEligible(false, voice, rawRms, s)) {
                     // Copy: the consumer is on another thread and `clean` is reused next frame.
                     voiceQueue.offer(Pair(input.copyOf(), if (s.hasLock && s.othersSpeaking < 0.3f) s.lockedSpeaking else 0f))
                 }

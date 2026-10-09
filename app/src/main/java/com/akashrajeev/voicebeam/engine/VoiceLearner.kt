@@ -17,6 +17,7 @@ class VoiceLearner(
     private var enrollFill = 0
     private val scoreBuf = FloatArray(chunk)
     private var scoreFill = 0
+    val querySamplesBuffered: Int get() = scoreFill
     private val prints = mutableListOf<FloatArray>()
     @Volatile var lastQueryEmbedding: FloatArray? = null
         private set

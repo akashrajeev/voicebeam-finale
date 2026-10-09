@@ -15,6 +15,7 @@ data class GateInputs(
     val audioOnly: Boolean = false, // use speaker embedding only; no camera fallback
     val wearerMatch: Float? = null, // fresh score of deliberately enrolled wearer, optional
     val wearerVetoEnabled: Boolean = false,
+    val visionAgeMs: Long = -1, // source-frame age; -1 when absent
     val voiceLearned: Boolean = true, // complete frozen enrollment, supplied by engine
 
 )
