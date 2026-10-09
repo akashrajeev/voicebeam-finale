@@ -45,6 +45,7 @@ class AudioPipeline(
     var enrollmentActive: () -> Boolean = { false }
     var enrollmentStatus: () -> String = { "unknown" }
     @Volatile var gateTuning = com.akashrajeev.voicebeam.core.GateTuning()
+    @Volatile var captionDenoised = false
     @Volatile var matcherDenoised = false
     @Volatile var quietOthers = 0.8f
     @Volatile var boostDb = 6f
@@ -283,7 +284,7 @@ class AudioPipeline(
                         " micSamples=" + input.size + " level=" + sqrt(e / n) +
                         " strict=" + gate.tuning.strictEnabled + " strictResidual=" + gate.tuning.residualGain +
                         " strictHangoverMs=" + gate.tuning.hangoverMs + " targetThreshold=" + gate.tuning.targetThreshold +
-                        " matcherInput=" + (if (matcherDenoised) "denoised" else "raw") + " track=ENH tseEnabled=false enrollment=" + enrollmentStatus() +
+                        " captionInput=" + (if (captionDenoised) "dpdfnet2-worker" else "raw") + " matcherInput=" + (if (matcherDenoised) "denoised" else "raw") + " track=ENH tseEnabled=false enrollment=" + enrollmentStatus() +
                         " quietOthers=" + quietOthers + " locked=" + s.hasLock + " visible=" + s.lockedVisible +
                         " lockedLips=" + s.lockedSpeaking + " otherLips=" + s.othersSpeaking +
                         " voiceMatch=" + s.voiceMatch + " wearerMatch=" + s.wearerMatch + " wearerVeto=" + s.wearerVetoEnabled + " boostAllowed=" + gate.boostAllowed +
