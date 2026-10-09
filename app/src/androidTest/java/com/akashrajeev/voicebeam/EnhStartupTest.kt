@@ -36,7 +36,7 @@ class EnhStartupTest {
         compose.waitUntil(30_000) { engine.state.value.listening || engine.state.value.audioError != null }
         assertNull(engine.state.value.audioError)
         assertTrue(engine.state.value.listening)
-        compose.onNodeWithText("ENH-7 | Enhancement, not overlapping-voice separation").assertExists()
+        compose.onNodeWithText("ENH-7 | Enhanced listening").assertExists()
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
         val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         assertNotNull(bmp)

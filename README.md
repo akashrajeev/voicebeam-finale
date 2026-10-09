@@ -1,48 +1,43 @@
 # VoiceBeam Finale
 
-Tap a face, follow the conversation. An Android app that locks onto one person with the camera, keeps their voice clear in your earphones, and shows live captions.
+Tap a face, follow the conversation. VoiceBeam is an Android app for enhanced listening through earphones, face-guided speaker focus and live captions.
 
 Team Vanquishers - iQOO Grand Finale, Open Innovation track.
 
-## What is on each branch
+## ENH-7 enhanced listening
 
-| Branch | What it is |
-|---|---|
-| `main` | The enhanced pipeline (ENH-7). Face lock, lip activity and a learned voice fingerprint decide when the locked person is talking. Their voice is boosted, others are turned down, captions run on raw audio. |
-| `separation` | Same app plus a clean seam for target-speaker extraction (separating two people talking at once). Research plan and an extractor interface, no working model yet. |
+- Tap a face to lock the person you want to follow.
+- Learn a voice fingerprint with three short speech samples.
+- Face landmarks, lip activity, speech activity and voice similarity guide turn-based gain.
+- GTCRN enhances microphone audio. Boost and a limiter shape the earphone output.
+- Moonshine Tiny provides captions from microphone audio.
+- Record sessions and export audio, video and captions. A local caption view supports a nearby PC.
 
-`main` is the finale baseline. Nothing from `separation` goes into `main` until it runs live on the phone.
+The pipeline adjusts turns rather than extracting a separate source: simultaneous voices remain mixed. When attribution is uncertain, listening continues without target boost.
 
-## How it works (main)
-
-```
-camera -> face landmarks -> lip activity ----+
-                                             v
-mic -> noise removal (GTCRN) -> TargetGate -> boost + limiter -> earphones
-  |                               ^
-  |                      voice fingerprint (TitaNet)
-  +-> raw audio -> voice activity (Silero) -> captions (Moonshine Tiny, sherpa-onnx)
-```
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for modules and [docs/PROVENANCE.md](docs/PROVENANCE.md) for where the code and numbers come from.
-
-## Honest limits
-
-- Turn-based gain: it boosts the locked person and turns others down when they speak alone. Two people talking at the same time stay mixed.
-- Voice lock needs a short enrollment (3 x 3 s). Face-only extraction is not built.
-- Captions use raw audio because denoising did not improve caption accuracy.
-- Audio plays through earphones only, never the phone speaker.
-- Real room, live lips and Bluetooth earbuds still need on-device checks. See `docs/PROVENANCE.md` for what was verified.
-
-## Build (Windows or Linux/macOS)
-
-Full steps: [docs/SETUP.md](docs/SETUP.md). Short version:
+## Architecture
 
 ```
-git clone <this repo> && cd VoiceBeamFinale
-bash scripts/fetch_models.sh      # Git Bash on Windows; downloads models + sherpa-onnx
+camera -> face landmarks -> lip activity ------+
+                                              v
+mic -> GTCRN -> audio blend -> TargetGate -> boost + limiter -> earphones
+ |                               ^
+ +-> raw speech -> voice fingerprint
+ +-> raw audio -> speech segments -> captions
+```
+
+[Architecture](docs/ARCHITECTURE.md) describes the modules. [Setup](docs/SETUP.md) covers the build and phone installation.
+
+## Build
+
+```sh
+bash scripts/fetch_models.sh
 ./gradlew testDebugUnitTest
-./gradlew installDebug            # phone connected by USB, debugging on
+./gradlew installDebug
 ```
 
-Requires JDK 17, Android SDK 35. Release signing comes from environment variables only. No keystore is stored in this repo.
+Requires JDK 17, Android SDK 35 and a connected Android phone (API 26 or newer). Signing keys are supplied outside the repository.
+
+## Validation
+
+The ENH-7 fix candidate on its review branch passed 75 JVM tests and built a debug APK. See the [build result](https://github.com/akashrajeev/voicebeam-finale/actions/runs/37952769964) and [candidate release](https://github.com/akashrajeev/voicebeam-finale/releases/tag/enh7-fix-1-66b5d0b). That candidate is separate from the main source until its PR is merged. Live-room hearing, camera/audio timing, Bluetooth routing and sustained device performance are evaluated on the test phone; unit tests do not establish those results.
