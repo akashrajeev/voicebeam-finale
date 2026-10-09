@@ -11,6 +11,7 @@ class VoiceLearner(
     private val sampleRate: Int = 16000,
     private val chunkSeconds: Float = 3f,
     private val needed: Int = 3,
+    private val profile: com.akashrajeev.voicebeam.core.SpeakerProfile = com.akashrajeev.voicebeam.core.SpeakerProfile.DEFAULT,
 ) {
     private val chunk = (sampleRate * chunkSeconds).toInt()
     private val enrollBuf = FloatArray(chunk)
@@ -88,7 +89,7 @@ class VoiceLearner(
                 val c = centroid
                 if (e != null && c != null && e.size == c.size) {
                     lastQueryEmbedding = e
-                    latest = VoiceMatch.score(VoiceMatch.cosine(e, c))
+                    latest = profile.score(VoiceMatch.cosine(e, c))
                 }
             }
         }
