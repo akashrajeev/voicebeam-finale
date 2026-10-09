@@ -7,6 +7,7 @@ data class Settings(
     val strictResidual: Float = .2f,
     val strictHangoverMs: Float = 700f,
     val targetMatchThreshold: Float = .8f,
+    val captionDenoised: Boolean = true,
     val matcherDenoised: Boolean = false,
     val quietOthers: Float = 0.86f,      // 0..1, how much to turn down everyone else
     val boostDb: Float = 6f,           // extra loudness in the earphones
@@ -31,6 +32,7 @@ class SettingsStore(context: Context) {
         strictResidual = p.getFloat("strictResidual", .2f),
         strictHangoverMs = p.getFloat("strictHangoverMs", 700f),
         targetMatchThreshold = p.getFloat("targetMatchThreshold", .8f),
+        captionDenoised = p.getBoolean("captionDenoised", true),
         matcherDenoised = p.getBoolean("matcherDenoised", false),
         quietOthers = p.getFloat("quiet", 0.86f),
         boostDb = p.getFloat("boost", 6f),
@@ -51,7 +53,7 @@ class SettingsStore(context: Context) {
         p.edit()
             .putBoolean("strictFocus", s.strictFocus).putFloat("strictResidual", s.strictResidual)
             .putFloat("strictHangoverMs", s.strictHangoverMs).putFloat("targetMatchThreshold", s.targetMatchThreshold)
-            .putBoolean("matcherDenoised", s.matcherDenoised)
+            .putBoolean("matcherDenoised", s.matcherDenoised).putBoolean("captionDenoised", s.captionDenoised)
             .putFloat("quiet", s.quietOthers).putFloat("boost", s.boostDb).putFloat("denoise", s.denoise)
             .putBoolean("sceneMic", s.useSceneMic).putString("saveMode", s.saveMode.name).putString("burn", s.captionBurn.name)
             .putBoolean("others", s.showOthersCaptions).putBoolean("raw", s.keepRawAudio).putBoolean("stage", s.stageEnabled)
