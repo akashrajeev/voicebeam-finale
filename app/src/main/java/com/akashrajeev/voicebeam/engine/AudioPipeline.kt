@@ -45,7 +45,7 @@ class AudioPipeline(
     var enrollmentActive: () -> Boolean = { false }
     var enrollmentStatus: () -> String = { "unknown" }
     @Volatile var gateTuning = com.akashrajeev.voicebeam.core.GateTuning()
-    @Volatile var matcherDenoised = true
+    @Volatile var matcherDenoised = false
     @Volatile var quietOthers = 0.8f
     @Volatile var boostDb = 6f
     @Volatile var denoiseMix = .8f          // 0 = raw, 1 = fully denoised
