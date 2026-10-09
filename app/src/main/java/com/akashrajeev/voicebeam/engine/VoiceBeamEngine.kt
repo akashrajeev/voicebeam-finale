@@ -153,7 +153,7 @@ class VoiceBeamEngine(private val app: Context) {
     fun lockAt(nx: Float, ny: Float): Boolean {
         val prev = tracker.lockedId
         val id = tracker.lockAt(nx, ny, SystemClock.uptimeMillis())
-        if (id != prev) { learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L }
+        if (id != prev) { learner?.clearQuery(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L }
         _state.update { it.copy(lockedId = id, voiceLearned = learner?.learned == true,
             voiceMatch = latestVoiceMatch, voiceEnrollmentActive = learner?.enrollmentEnabled == true,
             voiceEnrollmentProgress = learner?.progress ?: 0f) }
@@ -199,6 +199,14 @@ class VoiceBeamEngine(private val app: Context) {
         _state.update { it.copy(wearerEnrollmentActive = false, wearerLearned = false,
             wearerEnrollmentProgress = 0f, wearerVetoEnabled = false) }
         Diagnostics.event("wearer_enrollment_clear")
+    }
+
+    /** Explicit forget, independent of face lock; retapping never clears enrollment. */
+    fun clearTargetVoice() {
+        learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
+        _state.update { it.copy(voiceLearned = false, voiceMatch = null,
+            voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
+        Diagnostics.event("target_enrollment_clear")
     }
 
     fun unlock() {
