@@ -48,10 +48,10 @@ class SuppressionTest {
         val g = TargetGate(); g.process(target.copy(othersSpeaking = 0.9f))
         assertEquals(TargetState.OVERLAP, g.state); assertFalse(g.boostAllowed)
     }
-    @Test fun incompleteEnrollmentNeverMutesOrBoosts() {
+    @Test fun incompleteVisibleEnrollmentPassesWithProvisionalBoost() {
         val g = TargetGate(); g.quietOthers = 1f
         repeat(100) { g.process(target.copy(voiceLearned = false, voiceMatch = 0.01f)) }
-        assertEquals(TargetState.UNCERTAIN, g.state); assertTrue(g.gain > 0.99f); assertFalse(g.boostAllowed)
+        assertEquals(TargetState.UNCERTAIN, g.state); assertTrue(g.gain > 0.99f); assertTrue(g.boostAllowed)
     }
     @Test fun ambiguousMatchDoesNotVetoVisibleTarget() {
         val g = TargetGate()
