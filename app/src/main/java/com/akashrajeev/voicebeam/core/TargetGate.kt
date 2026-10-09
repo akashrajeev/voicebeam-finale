@@ -32,7 +32,7 @@ class TargetGate(
     private val frameMs: Float = 10f,
     private val attackMs: Float = 25f,
     private val releaseMs: Float = 60f,
-    private val holdMs: Float = 300f,
+    private val holdMs: Float = 700f,
 ) {
     var state: TargetState = TargetState.UNLOCKED
         private set
@@ -61,7 +61,7 @@ class TargetGate(
             i.othersSpeaking > 0.55f && i.lockedSpeaking < 0.3f -> TargetState.OTHER
             i.lockedVisible && i.lockedSpeaking > 0.55f -> TargetState.TARGET
             !i.lockedVisible -> TargetState.UNCERTAIN
-            (i.voiceMatch ?: 0f) > 0.8f && i.lockedSpeaking > 0.3f -> TargetState.TARGET
+            (i.voiceMatch ?: 0f) > 0.8f && i.lockedSpeaking > 0.1f -> TargetState.TARGET
             else -> TargetState.UNCERTAIN
         }
         return when (state) {
@@ -97,7 +97,11 @@ class TargetGate(
         val confirmed = !i.hasLock || ((i.audioOnly || i.lockedVisible) &&
             ((i.voiceLearned && i.voiceActive && state == TargetState.TARGET) ||
                 (i.voiceLearned && !i.voiceActive && holdLeft > 0f)))
-        boostAllowed = confirmed
+        // Provisional general monitor for a visible, not-yet-learned lock.
+        // This does not attribute speech to the target or lower the gate gain.
+        val provisional = i.hasLock && !i.voiceLearned && !i.audioOnly &&
+            i.lockedVisible && state == TargetState.UNCERTAIN
+        boostAllowed = confirmed || provisional
         val strength = quietOthers.coerceIn(0f, 1f)
         // Squared residual gives useful suppression despite proximity to the phone mic.
         // At80% residual is4%; max attenuation keeps2% to avoid completely lost speech.
