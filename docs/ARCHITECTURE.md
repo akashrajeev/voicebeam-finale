@@ -30,3 +30,19 @@ Package `com.akashrajeev.voicebeam`:
 - Optional wearer-voice veto is RAM-only and off by default.
 - Caption queue is bounded and drops oldest, counted in diagnostics.
 - Models are released on stop.
+
+## Experimental extraction seam (branch `enh-exp`, disabled by default)
+
+- `separation/TargetExtractor.kt` is the interface (streaming, causal, same
+  length in/out, fallback to input when unsure) plus a `PassthroughExtractor`.
+- `core/TseStage.kt` wraps it: disabled returns the frame untouched; enabled
+  delegates with try/catch fallback and counts breaches for diagnostics.
+- The hearing path runs denoised audio through the stage before gate/boost;
+  VAD, voice fingerprint and captions stay on the pre-TSE signals so an
+  experimental extractor cannot corrupt attribution.
+- The audio diagnostic event reports `tseEnabled/tse/tseLatencyMs/tseUs/tseFallbacks`.
+- Overlap is now observable: `FrameInfo.overlap` -> `LiveState.overlapNow` ->
+  a "Two voices — mixed" chip, since the scalar gate passes overlap by design.
+- `research/tse/` holds the host-screening protocol and candidate table. No
+  real extractor is wired in; behavior is identical to ENH-7 until one passes
+  the phone test.

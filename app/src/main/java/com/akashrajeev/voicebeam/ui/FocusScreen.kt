@@ -258,7 +258,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     Text("ENH-7 | Enhanced listening", color = Color.White, fontSize = 12.sp)
                     Text(engine.enrollmentMessage(), color = Color.White, fontSize = 12.sp)
                 }
-                StatusLine(state.lockedId != null, state.lockedSpeaking, state.voiceLearned, state.voiceMatch) { engine.unlock() }
+                StatusLine(state.lockedId != null, state.lockedSpeaking, state.voiceLearned, state.voiceMatch, state.overlapNow) { engine.unlock() }
                 if (state.wearerEnrollmentActive) {
                     Text("Learning YOUR voice ${(state.wearerEnrollmentProgress * 100).roundToInt()}%: only you speak. Target learning paused.", color = Muted, fontSize = 12.sp)
                 }
@@ -336,10 +336,14 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
 }
 
 @Composable
-private fun StatusLine(locked: Boolean, speaking: Float, learned: Boolean, match: Float?, onUnlock: () -> Unit) {
+private fun StatusLine(locked: Boolean, speaking: Float, learned: Boolean, match: Float?, overlap: Boolean, onUnlock: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (locked) {
             Chip(if (speaking > 0.35f) "Speaking · locked" else "Locked", color = Accent.copy(alpha = 0.22f), dot = Accent)
+            if (overlap) {
+                Spacer(Modifier.width(8.dp))
+                Chip("Two voices — mixed", color = Card)
+            }
             Spacer(Modifier.width(8.dp))
             Chip(if (learned) "Voice learned" + (match?.let { " · ${(it * 100).roundToInt()}%" } ?: "") else "Voice not learned", color = Card)
             Spacer(Modifier.weight(1f))

@@ -260,10 +260,13 @@ class VoiceBeamEngine(private val app: Context) {
             }
         }) { f ->
             latestProbability = f.probability
-            _state.update { it.copy(inputLevel = f.level, gain = f.gain, targetProbability = f.probability, earphones = f.monitorRoute) }
+            _state.update { it.copy(inputLevel = f.level, gain = f.gain, targetProbability = f.probability, earphones = f.monitorRoute, overlapNow = f.overlap) }
         }
         p.enrollmentActive = { learner?.enrollmentEnabled == true || wearerLearner?.enrollmentEnabled == true }
         p.enrollmentStatus = { enrollmentMessage() }
+        // Cue for the (currently disabled) extraction stage: frozen enrollment
+        // fingerprint + locked-face lip activity. Copied so audio-thread use is safe.
+        p.embeddingProvider = { try { learner?.centroid?.copyOf() } catch (_: Throwable) { null } }
         p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
         pipeline = p
         pipelineDebugFeed = wantDebug
@@ -294,7 +297,7 @@ class VoiceBeamEngine(private val app: Context) {
         pipeline?.stop(); pipeline = null
         captionThread?.join(1500); voiceThread?.join(1500)
         captionThread = null; voiceThread = null
-        _state.update { it.copy(listening = false, partial = "", inputLevel = 0f) }
+        _state.update { it.copy(listening = false, partial = "", inputLevel = 0f, overlapNow = false) }
         lifecycle.finishStop()
     }
 

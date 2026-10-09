@@ -37,7 +37,7 @@ class AudioPipeline(
     private val onError: (Throwable) -> Unit = {},
     private val onFrame: (FrameInfo) -> Unit,
 ) {
-    data class FrameInfo(val level: Float, val gain: Float, val probability: Float, val voiceActive: Boolean, val monitorRoute: String?)
+    data class FrameInfo(val level: Float, val gain: Float, val probability: Float, val voiceActive: Boolean, val monitorRoute: String?, val overlap: Boolean = false)
     data class CaptionBlock(val samples: FloatArray, val captureMs: Long, val probability: Float, val voiceActive: Boolean)
     private var capturedSamples = 0L
     val droppedCaptionBlocks: Long get() = asrQueue.dropped
@@ -52,6 +52,16 @@ class AudioPipeline(
     @Volatile var cleanWriter: WavWriter? = null
     /** Debug builds only: when set, called with the frame size to produce mic input. */
     @Volatile var debugFeed: ((Int) -> FloatArray)? = null
+    /**
+     * Optional target-speaker extraction in front of the hearing path.
+     * Disabled by default: [tseStage] then returns the denoised frame untouched,
+     * so listening, captions and identity behave exactly as ENH-7.
+     * Detection/identity (VAD, voice fingerprint, captions) always stay on the
+     * pre-TSE signals; only the earphone feed goes through the extractor.
+     */
+    val tseStage = com.akashrajeev.voicebeam.core.TseStage()
+    /** Enrollment fingerprint for the extractor cue; null when not learned. */
+    var embeddingProvider: () -> FloatArray? = { null }
 
     /**
      * Raw audio for captions (consumer: caption thread). Streaming ASR needs ordered audio, so this is
@@ -80,7 +90,7 @@ class AudioPipeline(
     fun start(useSceneMic: Boolean) {
         if (running.getAndSet(true)) return
         Diagnostics.event("audio_start sceneMic=" + useSceneMic)
-        capturedSamples = 0L; asrQueue.clear(); voiceQueue.clear(); vad.reset(); cleanVad.sample { it.reset() }
+        capturedSamples = 0L; asrQueue.clear(); voiceQueue.clear(); vad.reset(); cleanVad.sample { it.reset() }; tseStage.reset()
         thread = Thread({
             try { loop(useSceneMic) }
             catch (t: Throwable) {
@@ -235,12 +245,22 @@ class AudioPipeline(
                 val gateStart = SystemClock.elapsedRealtimeNanos()
                 val s = signals()
                 gate.quietOthers = quietOthers
+                // Experimental extraction stage: hearing path only, disabled by default.
+                // Detection/identity keep using raw mic (vad/voiceQueue) and denoised
+                // mix (cleanVad) so a future extractor cannot corrupt attribution.
+                val tseCue = com.akashrajeev.voicebeam.separation.TargetExtractor.Cue(
+                    voiceEmbedding = try { embeddingProvider() } catch (_: Throwable) { null },
+                    lockedLips = if (s.hasLock && !s.audioOnly) s.lockedSpeaking else null,
+                )
+                val tseStart = SystemClock.elapsedRealtimeNanos()
+                val hearing = tseStage.apply(clean, tseCue)
+                val tseUs = (SystemClock.elapsedRealtimeNanos() - tseStart) / 1000
                 val observation = com.akashrajeev.voicebeam.core.SpeechObservation.observe(
                     enrollmentActive(), voice, rawRms, s)
                 val g = gate.process(observation.inputs)
                 val requestedBoost = if (gate.boostAllowed) TargetGate.dbToLinear(boostDb) else 1f
-                val boost = FrameDsp.safeBoost(clean, n, g, requestedBoost) // diagnostic estimate; envelope limits actual output
-                val e = envelope.process(clean, n, g, requestedBoost, gated, out)
+                val boost = FrameDsp.safeBoost(hearing, n, g, requestedBoost) // diagnostic estimate; envelope limits actual output
+                val e = envelope.process(hearing, n, g, requestedBoost, gated, out)
                 cleanWriter?.write(gated, n)
                 // Speaker playback of a boosted live microphone causes a runaway feedback loop.
                 // The actual routed output, not merely a paired headset, must be safe.
@@ -278,7 +298,9 @@ class AudioPipeline(
                         " effectiveBoost=" + boost + " boostDb=" + boostDb + " rawRms=" + sqrt(rawEnergy / input.size) +
                         " outputRms=" + sqrt(outputEnergy / n) +
                         " micSamples=" + input.size + " level=" + sqrt(e / n) +
-                        " track=ENH tseEnabled=false enrollment=" + enrollmentStatus() +
+                        " track=ENH tseEnabled=" + tseStage.enabled + " tse=" + tseStage.extractor.name +
+                        " tseLatencyMs=" + tseStage.extractor.latencyMs + " tseUs=" + tseUs +
+                        " tseFallbacks=" + tseStage.fallbackCount + " enrollment=" + enrollmentStatus() +
                         " quietOthers=" + quietOthers + " locked=" + s.hasLock + " visible=" + s.lockedVisible +
                         " lockedLips=" + s.lockedSpeaking + " otherLips=" + s.othersSpeaking +
                         " voiceMatch=" + s.voiceMatch + " wearerMatch=" + s.wearerMatch + " wearerVeto=" + s.wearerVetoEnabled + " boostAllowed=" + gate.boostAllowed +
@@ -304,7 +326,8 @@ class AudioPipeline(
                 com.akashrajeev.voicebeam.core.SpeechObservation.enqueue(
                     observation, input, voiceQueue)
                 onFrame(FrameInfo(sqrt(e / n), g, gate.probability, voice,
-                    routed?.productName?.toString().takeIf { headphoneRoute }))
+                    routed?.productName?.toString().takeIf { headphoneRoute },
+                    overlap = gate.state == com.akashrajeev.voicebeam.core.TargetState.OVERLAP))
                 if (com.akashrajeev.voicebeam.BuildConfig.DEBUG && ++dbgFrames % 400 == 0L) {
                     var er = 0f; for (k in 0 until input.size) er += input[k] * input[k]
                     Log.i("VoiceBeamAudio", "audiodbg dbg=" + (dbg != null) + " in=" + kotlin.math.sqrt(er / input.size) + " clean=" + kotlin.math.sqrt(e / n) + " g=" + g + " route=" + routed?.type + " written=" + written + " monitor=" + writeSpeech)

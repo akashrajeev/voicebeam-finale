@@ -37,6 +37,7 @@ data class LiveState(
     val wearerLearned: Boolean = false,
     val wearerVetoEnabled: Boolean = false,
     val voiceMatch: Float? = null,
+    val overlapNow: Boolean = false,
     val inputLevel: Float = 0f,
     val segments: List<CaptionSegment> = emptyList(),
     val partial: String = "",
