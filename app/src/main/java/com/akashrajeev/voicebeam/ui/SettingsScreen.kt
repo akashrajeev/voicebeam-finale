@@ -67,6 +67,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SliderRow("Voice target threshold", "${(s.targetMatchThreshold * 100).roundToInt()} score", s.targetMatchThreshold, .2f.. .99f) { v -> engine.updateSettings { it.copy(targetMatchThreshold = v) } }
             SwitchRow("Denoised speaker matcher", "Changing this stops listening and clears both templates. Start listening and learn again.", s.matcherDenoised) { v -> engine.updateSettings { it.copy(matcherDenoised = v) } }
             SectionHeader("Captions")
+            SwitchRow("DPDFNet-2 caption input", "Caption-only worker enhancement. RAW fallback when off. Changing stops listening; restart. Voice templates stay.", s.captionDenoised) { v -> engine.updateSettings { it.copy(captionDenoised = v) } }
             ValueRow("Language", "English")
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
             Text("Caption size", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
