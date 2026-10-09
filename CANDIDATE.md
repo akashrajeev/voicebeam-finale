@@ -77,3 +77,13 @@ unchanged. Android compilation/Settings pixels still pending CI/device. No main
 merge. Test original recording before declaring a hearing improvement.
 
 Proxy bake-off reported by research: TitaNet gap0.669 raw vs0.485 GTCRN and0.578 DPDFNet-2. Therefore RAW stays default; denoising is not assumed better. Synthetic proxy, not this room. Enroll/test RAW first, then toggle denoised, restart/relearn and repeat.
+
+## Experiment 6: DPDFNet-2 captions, off experiment-3
+
+DPDFNet-2 is enabled for captions by default, with a RAW fallback switch in Settings. Matcher still defaults to RAW, TitaNet Small stays, hearing still uses GTCRN with the existing mix. No GTCRN output reaches the caption recognizer.
+
+The caption worker owns a separate streaming sherpa-onnx v1.13.8 OnlineSpeechDenoiser using dpdfnet config, models/dpdfnet2.onnx (10,249,356 bytes, SHA256 ce35d6025fc71df0ef10d1540e1b7916837bbfe5f6896deb744508d2cad487a9). fetch_models.sh checks the digest. Input queue always carries raw mic packets; native STFT framing remains sherpa-owned. Heavy caption enhancement is off the hearing/matcher thread. Empty warmup output waits rather than substituting raw; initialization/process failure logs an explicit RAW fallback, resets ASR on a process failure, and logs effective source. Queue drop resets denoiser and ASR so recurrent state is not carried across missing input.
+
+Switching caption input stops listening and resets caption state on restart, preserving voice templates. Both caption lanes use the same scene-mic-selected AudioRecord input as the hearing pipeline, not a second microphone. Scene mic uses CAMCORDER with VOICE_RECOGNITION/MIC fallback; builtin mic is the preferred device. Capture-clock labels remain approximate under native buffering; target labels/VAD follow raw capture metadata, not sample-accurate DPDF output alignment.
+
+106 host JVM tests; Android compile/native inference checks require CI/phone. Benchmark WER selection is noisy proxy evidence, not a proven user-room result. Need phone verification of caption delay, throughput, resource load, source logs and Settings pixels. No hearing quality or real-time guarantee is claimed.
