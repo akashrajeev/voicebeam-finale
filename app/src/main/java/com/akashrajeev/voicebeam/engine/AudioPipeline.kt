@@ -163,6 +163,7 @@ class AudioPipeline(
         val envelope = com.akashrajeev.voicebeam.core.ListenEnvelope(SAMPLE_RATE)
         val alignment = DenoiseAlignment(maxOf(4096, frameShift * 8))
         val hearingMix = com.akashrajeev.voicebeam.core.HearingMix(SAMPLE_RATE)
+        val rumbleFilter = com.akashrajeev.voicebeam.core.HearingRumbleFilter(SAMPLE_RATE)
         val denoiseFallback = com.akashrajeev.voicebeam.core.FallbackCounter()
         fun reportFallback(kind: String) {
             if (denoiseFallback.record(SystemClock.uptimeMillis())) {
@@ -253,6 +254,8 @@ class AudioPipeline(
                     it.probability
                 }
                 val cleanVadUs = (SystemClock.elapsedRealtimeNanos() - cleanVadStart) / 1000
+                // Hearing only, before final envelope/limiter; detection and captions stay raw.
+                rumbleFilter.process(clean, n)
                 val requestedBoost = if (gate.boostAllowed) TargetGate.dbToLinear(boostDb) else 1f
                 val boost = FrameDsp.safeBoost(clean, n, g, requestedBoost) // diagnostic estimate; envelope limits actual output
                 val e = envelope.process(clean, n, g, requestedBoost, gated, out)
@@ -303,7 +306,7 @@ class AudioPipeline(
                         " queryFallback=" + (!voice && observation.queryWeight != null) +
                         " playbackUnderruns=" + track?.underrunCount +
                         " denoiseMix=" + denoiseMix + " hearingMix=" + mix + " hearingMixTarget=" + hearingMix.requested +
-                        " denoiseFallbacks=" + denoiseFallback.count + " visionAgeMs=" + s.visionAgeMs +
+                        " rumbleCutHz=80 denoiseFallbacks=" + denoiseFallback.count + " visionAgeMs=" + s.visionAgeMs +
                         " voiceQueue=" + voiceQueue.size + " droppedVoiceBlocks=" + voiceQueue.dropped +
                         " audioProcessUptimeMs=" + SystemClock.uptimeMillis() + " written=" + written +
                         " denoiseUs=" + (vadStart - denoiseStart) / 1000 +
