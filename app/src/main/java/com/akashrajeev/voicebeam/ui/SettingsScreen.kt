@@ -54,12 +54,18 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             Text("Settings", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
             Text("ENH-7: enhanced listening and speaker-turn focus", color = Muted, fontSize = 12.sp)
             Text(engine.enrollmentMessage(), color = Muted, fontSize = 12.sp)
-            Text("Uncertain voice passes enhanced audio without boost. Only clear other-speaker evidence turns it down.", color = Muted, fontSize = 12.sp)
+            Text("Strict focus turns down learned but unconfirmed speech after hangover. It can mute the target too; overlap is not separated.", color = Muted, fontSize = 12.sp)
             SectionHeader("Listening")
             SliderRow("Noise removal", when { s.denoise < 0.05f -> "Off"; s.denoise < 0.6f -> "Light"; else -> "Strong" }, s.denoise, 0f..1f) { v -> engine.updateSettings { it.copy(denoise = v) } }
             SliderRow("Quiet others (default)", "${(s.quietOthers * 100).roundToInt()}%", s.quietOthers, 0f..1f) { v -> engine.updateSettings { it.copy(quietOthers = v) } }
             SliderRow("Hearing boost", "+${s.boostDb.roundToInt()} dB", s.boostDb, 0f..24f) { v -> engine.updateSettings { it.copy(boostDb = v) } }
             SwitchRow("Point mic at the scene", "Uses the camcorder mic setup, best with the back camera", s.useSceneMic) { v -> engine.updateSettings { it.copy(useSceneMic = v) } }
+            SectionHeader("Candidate focus tuning")
+            SwitchRow("Strict learned focus", "Turn down unconfirmed speech; may hide target on matcher misses", s.strictFocus) { v -> engine.updateSettings { it.copy(strictFocus = v) } }
+            SliderRow("Unconfirmed residual gain", "${(s.strictResidual * 100).roundToInt()}% amplitude", s.strictResidual, .02f..1f) { v -> engine.updateSettings { it.copy(strictResidual = v) } }
+            SliderRow("Target hangover", "${s.strictHangoverMs.roundToInt()} ms", s.strictHangoverMs, 0f..2000f) { v -> engine.updateSettings { it.copy(strictHangoverMs = v) } }
+            SliderRow("Voice target threshold", "${(s.targetMatchThreshold * 100).roundToInt()} score", s.targetMatchThreshold, .2f.. .99f) { v -> engine.updateSettings { it.copy(targetMatchThreshold = v) } }
+            SwitchRow("Denoised speaker matcher", "Changing this stops listening and clears both templates. Start listening and learn again.", s.matcherDenoised) { v -> engine.updateSettings { it.copy(matcherDenoised = v) } }
             SectionHeader("Captions")
             ValueRow("Language", "English")
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
