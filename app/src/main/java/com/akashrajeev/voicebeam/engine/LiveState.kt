@@ -16,6 +16,8 @@ data class RecordingState(
 )
 
 data class LiveState(
+    // STUBBED: remains null until Akash wires the structured 1 Hz audio hook.
+    val proofTelemetry: com.akashrajeev.voicebeam.core.ProofTelemetry? = null,
     val modelsReady: Boolean = false,
     val modelError: String? = null,
     val listening: Boolean = false,
