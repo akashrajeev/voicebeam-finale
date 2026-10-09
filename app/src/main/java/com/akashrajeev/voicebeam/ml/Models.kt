@@ -102,11 +102,11 @@ class Denoiser(assets: AssetManager) {
     fun release() = impl.release()
 }
 
-/** Voice fingerprint (CAM++ speaker embedding). */
-class VoicePrint(assets: AssetManager) {
+/** Speaker extractor. Packaged profile defaults to NeMo TitaNet Small. */
+class VoicePrint(assets: AssetManager, val profile: com.akashrajeev.voicebeam.core.SpeakerProfile = com.akashrajeev.voicebeam.core.SpeakerProfile.DEFAULT) {
     private val extractor = SpeakerEmbeddingExtractor(
         assetManager = assets,
-        config = SpeakerEmbeddingExtractorConfig(model = "models/speaker.onnx", numThreads = 1),
+        config = SpeakerEmbeddingExtractorConfig(model = profile.asset, numThreads = 1),
     )
 
     fun embed(samples: FloatArray): FloatArray? {
