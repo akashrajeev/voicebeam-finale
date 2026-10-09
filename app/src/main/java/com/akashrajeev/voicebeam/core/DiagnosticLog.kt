@@ -8,7 +8,7 @@ class DiagnosticLog(private val capacity: Int = 300) {
     private val lines = ArrayDeque<String>()
     @Synchronized fun add(line: String) {
         if (lines.size >= capacity) lines.removeFirst()
-        lines.addLast(line.take(700))
+        lines.addLast(line.take(2048))
     }
     @Synchronized fun snapshot(): String = lines.joinToString("\n")
     @Synchronized fun clear() = lines.clear()
