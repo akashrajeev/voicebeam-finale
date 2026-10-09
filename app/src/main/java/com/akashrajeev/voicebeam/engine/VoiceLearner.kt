@@ -102,6 +102,10 @@ class VoiceLearner(
         return FloatArray(e.size) { (e[it] / norm).toFloat() }
     }
 
+    /** Retapping preserves the frozen template, but discards the old face's query audio. */
+    @Synchronized
+    fun clearQuery() { lastQueryEmbedding = null; scoreFill = 0; querySinceScore = 0; queryHasScore = false }
+
     @Synchronized
     fun reset() { enrollmentMessage="Voice not learned (cleared/interrupted)"; lastQueryEmbedding = null; enrollmentEnabled = false; prints.clear(); centroid = null; enrollFill = 0; scoreFill = 0; querySinceScore = 0; queryHasScore = false }
 }
