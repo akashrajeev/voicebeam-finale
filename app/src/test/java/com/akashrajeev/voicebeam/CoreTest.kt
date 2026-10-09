@@ -128,7 +128,7 @@ class CoreTest {
         val talking = GateInputs(true, 0.9f, 0f, null, true)
         repeat(50) { g.process(talking) }
         val pause = GateInputs(true, 0f, 0f, null, false)
-        repeat(10) { g.process(pause) }     // 100 ms pause, inside the 300 ms hold
+        repeat(10) { g.process(pause) }     // 100 ms pause, inside the 700 ms hold
         assertTrue(g.gain > 0.85f)
     }
 
