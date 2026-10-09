@@ -1,0 +1,36 @@
+VoiceBeam suppression check: build #8 vs user-confirmed Bluetooth build #7
+
+Keep earbuds, phone placement, media volume, hearing boost and Quiet others
+unchanged. Write down these settings. Start with moderate comfortable volume.
+Do not crank boost to hide a failed test. Keep the locked face visible.
+
+Each solo condition: three repeats, 10 seconds speaking and 5 seconds silence.
+1. Target alone: lock the other person, they say a fixed sentence, wearer quiet.
+2. Other alone: locked person stays still/quiet, wearer says the same sentence.
+3. Transition: target speaks, pause, wearer speaks, target speaks again.
+4. Both: speak together. Listen for whether target stays understandable, but do
+   not label the mixed output as separated voices or infer a dB isolation score.
+
+Use Settings > Live diagnostics > Clear log before each condition, then Share
+log after it. Name what was tested in the WhatsApp message. This exports only
+technical state, not voice samples. Keep a copy of build #7 for rollback.
+
+Pass/fail checks: Bluetooth still audible, target words not chopped, electronic
+self-copy clearly reduced when target quiet, no loud pop at lock/unlock, no
+speaker output when earbuds disconnect, no audio errors, no growing ASR backlog.
+Log-only facts: actual route, input/output RMS, applied boost, gate state,
+slider value, lip confidence and voice match. No new suppression log received
+at preparation time. Lip/voice decisions can be wrong; no measured result yet.
+
+The analyzer script can summarize labelled time windows from a log:
+python3 analyze_diagnostics.py LOG.txt --target START:END --other START:END
+Add --both START:END only as mixture-gain diagnostic, not isolation proof.
+Milliseconds are the elapsed times at the start of each log line.
+
+This reports sampled DIGITAL output gain, NOT acoustic dB in the ear canal.
+For a judge-facing quantitative chart, use a separate continuous test harness
+with energy accumulation over every frame, ground-truth condition labels and
+repeated trials. Report conditions, sample count, target pass loss, distractor
+attenuation and transition delay. Never mix speaker identity accuracy with
+amplitude attenuation. A fresh-code finale can recreate this simple protocol
+without carrying repository code into an event that forbids it.
