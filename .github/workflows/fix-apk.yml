@@ -34,6 +34,13 @@ jobs:
       - name: Report validation (no release or artifact publication)
         run: |
           git rev-parse HEAD
+          python3 - <<'PY'
+          import pathlib, subprocess
+          sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          config = pathlib.Path('app/build/generated/source/buildConfig/debug/com/akashrajeev/voicebeam/BuildConfig.java').read_text()
+          assert 'LAB_COMMIT = "' + sha + '";' in config
+          print('BuildConfig source commit verified: ' + sha)
+          PY
           sha256sum app/build/outputs/apk/debug/app-debug.apk
           python3 - <<'PY'
           import glob, xml.etree.ElementTree as E
