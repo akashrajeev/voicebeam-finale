@@ -17,6 +17,10 @@ class VoiceLearner(
     private var enrollFill = 0
     private val scoreBuf = FloatArray(chunk)
     private var scoreFill = 0
+    private val queryHop = sampleRate.coerceAtLeast(1).coerceAtMost(chunk)
+    private var querySinceScore = 0
+    private var queryHasScore = false
+    val querySamplesBuffered: Int get() = scoreFill
     private val prints = mutableListOf<FloatArray>()
     @Volatile var lastQueryEmbedding: FloatArray? = null
         private set
@@ -64,16 +68,31 @@ class VoiceLearner(
             }
             return null
         }
-        scoreFill = append(scoreBuf, scoreFill, samples)
-        if (scoreFill < chunk) return null
-        scoreFill = 0
-        val e = validEmbedding(embed(scoreBuf.copyOf())) ?: return null
-        lastQueryEmbedding = e
-        val c = centroid ?: return null
-        if (e.size != c.size) return null
-        val score = VoiceMatch.score(VoiceMatch.cosine(e, c))
-        // Lab: freeze enrolment; self-confirming adaptation can learn a distractor.
-        return score
+        // Full 3-second context, refreshed per voiced second. Never extend score freshness
+        // without computing a new embedding, and never modify the enrollment centroid.
+        var latest: Float? = null
+        var offset = 0
+        while (offset < samples.size) {
+            val untilDecode = if (queryHasScore) queryHop - querySinceScore else chunk - scoreFill
+            val n = minOf(samples.size - offset, untilDecode)
+            if (scoreFill + n > chunk) {
+                val discard = scoreFill + n - chunk
+                System.arraycopy(scoreBuf, discard, scoreBuf, 0, scoreFill - discard)
+                scoreFill -= discard
+            }
+            System.arraycopy(samples, offset, scoreBuf, scoreFill, n)
+            scoreFill += n; offset += n; querySinceScore += n
+            if (scoreFill == chunk && (!queryHasScore || querySinceScore >= queryHop)) {
+                querySinceScore = 0; queryHasScore = true
+                val e = validEmbedding(embed(scoreBuf.copyOf()))
+                val c = centroid
+                if (e != null && c != null && e.size == c.size) {
+                    lastQueryEmbedding = e
+                    latest = VoiceMatch.score(VoiceMatch.cosine(e, c))
+                }
+            }
+        }
+        return latest
     }
 
     private fun validEmbedding(e: FloatArray?): FloatArray? {
@@ -83,12 +102,6 @@ class VoiceLearner(
         return FloatArray(e.size) { (e[it] / norm).toFloat() }
     }
 
-    private fun append(buf: FloatArray, fill: Int, s: FloatArray): Int {
-        val n = minOf(s.size, buf.size - fill)
-        System.arraycopy(s, 0, buf, fill, n)
-        return fill + n
-    }
-
     @Synchronized
-    fun reset() { enrollmentMessage="Voice not learned (cleared/interrupted)"; lastQueryEmbedding = null; enrollmentEnabled = false; prints.clear(); centroid = null; enrollFill = 0; scoreFill = 0 }
+    fun reset() { enrollmentMessage="Voice not learned (cleared/interrupted)"; lastQueryEmbedding = null; enrollmentEnabled = false; prints.clear(); centroid = null; enrollFill = 0; scoreFill = 0; querySinceScore = 0; queryHasScore = false }
 }

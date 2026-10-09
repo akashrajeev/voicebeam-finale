@@ -222,7 +222,9 @@ class VoiceBeamEngine(private val app: Context) {
             wearerVetoEnabled = wearerVetoEnabled,
             voiceActive = false,
             voiceLearned = learner?.learned == true,
-            lockedVisible = !audioOnly && (lockedFace == null || now - lockedFace.lastSeenMs < 400),
+            visionAgeMs = lockedFace?.let { now - it.lastSeenMs } ?: -1,
+            lockedVisible = !audioOnly && lockedFace != null &&
+                com.akashrajeev.voicebeam.core.SpeechObservation.visionFresh(now, lockedFace.lastSeenMs),
         )
     }
 
@@ -373,7 +375,7 @@ class VoiceBeamEngine(private val app: Context) {
                 }
                 val speakerNow = SystemClock.elapsedRealtime()
                 if (speakerNow - diagnosticVoiceAt >= 1000) {
-                    Diagnostics.event("speakerUs=" + (SystemClock.elapsedRealtimeNanos() - speakerStart) / 1000 + " learned=" + l.learned + " enrollmentActive=" + l.enrollmentEnabled + " enrollmentProgress=" + l.progress + " completedPhrases=" + l.completedPhrases + " match=" + score)
+                    Diagnostics.event("speakerUs=" + (SystemClock.elapsedRealtimeNanos() - speakerStart) / 1000 + " learned=" + l.learned + " enrollmentActive=" + l.enrollmentEnabled + " enrollmentProgress=" + l.progress + " completedPhrases=" + l.completedPhrases + " match=" + score + " querySamples=" + l.querySamplesBuffered + " scoreAgeMs=" + (SystemClock.uptimeMillis() - lastVoiceMatchAtMs))
                     diagnosticVoiceAt = speakerNow
                 }
                 if (score != null) {
