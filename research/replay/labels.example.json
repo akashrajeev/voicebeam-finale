@@ -1,0 +1,9 @@
+[
+ {"name":"sync_and_lock","start_ms":0,"end_ms":10000,"expected":[]},
+ {"name":"target_alone","start_ms":10000,"end_ms":25000,"expected":["TARGET"]},
+ {"name":"other_alone","start_ms":25000,"end_ms":40000,"expected":["OTHER"],"switch":true},
+ {"name":"target_returns","start_ms":40000,"end_ms":55000,"expected":["TARGET"],"switch":true},
+ {"name":"both","start_ms":55000,"end_ms":70000,"expected":["OVERLAP","UNCERTAIN"]},
+ {"name":"target_offscreen_other_speaks","start_ms":70000,"end_ms":85000,"expected":["UNCERTAIN"],"switch":true},
+ {"name":"ending_sync","start_ms":85000,"end_ms":90000,"expected":[]}
+]
