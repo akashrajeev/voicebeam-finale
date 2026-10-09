@@ -375,7 +375,7 @@ class VoiceBeamEngine(private val app: Context) {
                 }
                 val speakerNow = SystemClock.elapsedRealtime()
                 if (speakerNow - diagnosticVoiceAt >= 1000) {
-                    Diagnostics.event("speakerUs=" + (SystemClock.elapsedRealtimeNanos() - speakerStart) / 1000 + " learned=" + l.learned + " enrollmentActive=" + l.enrollmentEnabled + " enrollmentProgress=" + l.progress + " completedPhrases=" + l.completedPhrases + " match=" + score + " querySamples=" + l.querySamplesBuffered + " scoreAgeMs=" + (SystemClock.uptimeMillis() - lastVoiceMatchAtMs))
+                    Diagnostics.event("speakerUs=" + (SystemClock.elapsedRealtimeNanos() - speakerStart) / 1000 + " learned=" + l.learned + " enrollmentActive=" + l.enrollmentEnabled + " enrollmentProgress=" + l.progress + " completedPhrases=" + l.completedPhrases + " match=" + score + " querySamples=" + l.querySamplesBuffered + " scoreAgeMs=" + (if (lastVoiceMatchAtMs > 0) SystemClock.uptimeMillis() - lastVoiceMatchAtMs else -1))
                     diagnosticVoiceAt = speakerNow
                 }
                 if (score != null) {

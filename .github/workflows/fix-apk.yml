@@ -1,13 +1,10 @@
-name: ENH7 review tests and APK
-# Manual approval per run. Source-only edits cannot silently skip validation:
-# the reviewed SHA is explicit, and no pushes/PR opens spend minutes.
+name: ENH7 main validation and APK
+# Automatic only for this explicitly approved workflow edit; future runs require approval.
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fix-apk.yml']
   workflow_dispatch:
-    inputs:
-      commit:
-        description: Full reviewed commit SHA to validate
-        required: true
-        type: string
 permissions:
   contents: read
 jobs:
@@ -15,13 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Validate requested revision
-        env:
-          REVIEW_SHA: ${{ inputs.commit }}
-        run: '[[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.commit }}
           persist-credentials: false
       - uses: actions/setup-java@v5
         with:
@@ -31,22 +23,25 @@ jobs:
         run: bash scripts/fetch_models.sh
       - name: Unit tests and debug APK
         run: ./gradlew --no-daemon testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
-      - name: Report validation (no release or artifact publication)
+      - name: Report exact source metadata and tests
         run: |
-          git rev-parse HEAD
           python3 - <<'PY'
-          import pathlib, subprocess
+          import pathlib, subprocess, glob, xml.etree.ElementTree as E
           sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           config = pathlib.Path('app/build/generated/source/buildConfig/debug/com/akashrajeev/voicebeam/BuildConfig.java').read_text()
           assert 'LAB_COMMIT = "' + sha + '";' in config
           print('BuildConfig source commit verified: ' + sha)
-          PY
-          sha256sum app/build/outputs/apk/debug/app-debug.apk
-          python3 - <<'PY'
-          import glob, xml.etree.ElementTree as E
           roots = [E.parse(p).getroot() for p in glob.glob('app/build/test-results/testDebugUnitTest/*.xml')]
           tests = sum(int(r.attrib['tests']) for r in roots)
           failures = sum(int(r.attrib.get('failures', '0')) + int(r.attrib.get('errors', '0')) for r in roots)
           assert roots and failures == 0
           print(f'{tests} JVM tests; {failures} failures/errors. Debug APK built. Phone test separate.')
           PY
+          sha256sum app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload candidate APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 1
+          if-no-files-found: error

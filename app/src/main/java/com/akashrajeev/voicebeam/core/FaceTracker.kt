@@ -46,7 +46,8 @@ class FaceTracker(
         val lockedTrack = tracks.firstOrNull { it.id == lockedId }
         if (lockedTrack != null && timeMs - lockedTrack.lastSeen > forgetAfterMs * 4) {
             tracks.remove(lockedTrack)
-            lockedId = null
+            // Retain the user's explicit target intent, not the stale face geometry.
+            // A new face cannot inherit this missing target's ID; retap or unlock is required.
         }
         return snapshot(timeMs)
     }
