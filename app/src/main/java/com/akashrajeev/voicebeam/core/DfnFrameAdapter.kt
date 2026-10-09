@@ -4,10 +4,10 @@ import kotlin.math.*
 
 /** Fixed3xrate converter and480sample framing. No future input; mono16k->48k->16k. */
 class DfnFrameAdapter(private val run: (FloatArray) -> FloatArray) {
-    // Windowed sinc anti-image/anti-alias FIR.31tapsat48k,cutoff7kHz.
-    private val taps=DoubleArray(31) { k ->
-        val m=k-15; val f=7000.0/48000
-        (if(m==0)2*f else sin(2*PI*f*m)/(PI*m))*(.54-.46*cos(2*PI*k/30))
+    // Windowed sinc anti-image/anti-alias FIR.95tapsat48k,cutoff7.6kHz.
+    private val taps=DoubleArray(95) { k ->
+        val m=k-47; val f=7600.0/48000
+        (if(m==0)2*f else sin(2*PI*f*m)/(PI*m))*(.54-.46*cos(2*PI*k/94))
     }.also { a -> val sum=a.sum();for(k in a.indices)a[k]/=sum }
     private val up=Fir(taps);private val down=Fir(taps)
     private val chunk=FloatArray(480);private var fill=0;private var phase=0

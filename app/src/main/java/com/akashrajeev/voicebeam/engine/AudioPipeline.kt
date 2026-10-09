@@ -174,7 +174,7 @@ class AudioPipeline(
         var dfnStage="starting"
         Diagnostics.backend("stage=starting abi="+android.os.Build.SUPPORTED_ABIS.joinToString(",")+" sdk="+android.os.Build.VERSION.SDK_INT)
         var dfn: DfnHearing? = try { DfnHearing(app.assets) { dfnStage=it;Diagnostics.backend(it) }.also {
-            Diagnostics.event("hearingBackend=DFN3 nativeHop48k=480 adapterDelayMs=16")
+            Diagnostics.backend("backend=DFN3 stage=native_ready frameBytes=960 attenDb=18 postFilterBeta=0 resamplerTaps=95 cutoffHz=7600 adapterDelayMs=16 firDelayMs=1.958 nonzero=fullwet off=raw_hearing_before_gate_costs_native")
         } } catch (t: Throwable) {
             Diagnostics.backend("backend=GTCRN failed="+dfnStage+" error="+t.javaClass.simpleName+":"+t.message+" cause="+t.cause?.message)
             reportFallback("dfn_load_" + t.javaClass.simpleName); null
@@ -332,7 +332,8 @@ class AudioPipeline(
                         " playbackUnderruns=" + track?.underrunCount +
                         " denoiseMix=" + denoiseMix + " hearingMix=" + mix + " hearingMixTarget=" + hearingMix.requested +
                         " hearingBackend=" + (if (dfn != null) "DFN3" else "GTCRN") + " dfnUs=" + dfnUs +
-                        " rumbleCutHz=80 denoiseFallbacks=" + denoiseFallback.count + " visionAgeMs=" + s.visionAgeMs +
+                        " dfnLsnr=" + dfn?.lastLsnr + " dfnSuspectLsnrFrames=" + dfn?.suspectLsnrFrames +
+                        " dfnAttenDb=18 resamplerTaps=95 rumbleCutHz=80 denoiseFallbacks=" + denoiseFallback.count + " visionAgeMs=" + s.visionAgeMs +
                         " voiceQueue=" + voiceQueue.size + " droppedVoiceBlocks=" + voiceQueue.dropped +
                         " audioProcessUptimeMs=" + SystemClock.uptimeMillis() + " written=" + written +
                         " denoiseUs=" + (vadStart - denoiseStart) / 1000 +

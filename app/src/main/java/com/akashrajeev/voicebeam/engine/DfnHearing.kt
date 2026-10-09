@@ -8,6 +8,10 @@ import java.nio.ByteOrder
 
 /** Per-session experiment. Native model runs on hearing path only; release on session end. */
 class DfnHearing(assets: AssetManager, private val status: (String)->Unit = {}) {
+    var lastLsnr: Float = 0f
+        private set
+    var suspectLsnrFrames: Long = 0
+        private set
     private val native=run {
         status("stage=asset_open path=models/dfn3-mobile.bin")
         val model=assets.open("models/dfn3-mobile.bin").use{it.readBytes()}
@@ -20,6 +24,9 @@ class DfnHearing(assets: AssetManager, private val status: (String)->Unit = {}) 
     private val adapter=DfnFrameAdapter { samples ->
         buffer.clear();for(x in samples)buffer.putShort((x.coerceIn(-1f,1f)*32767f).toInt().toShort())
         val score=native.process(buffer);require(score.isFinite())
+        lastLsnr=score
+        // LSNR and native error codes share a float return. Negative valid LSNR must not trigger false fallback.
+        if(score < -15f || score > 35f) suspectLsnrFrames++
         buffer.clear();FloatArray(480){buffer.short/32768f}
     }
     fun process(input:FloatArray):FloatArray=adapter.process(input)
