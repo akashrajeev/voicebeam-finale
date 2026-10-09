@@ -72,7 +72,7 @@ android {
 }
 
 dependencies {
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
+    implementation(files("libs/onnxruntime-java-jni.aar"))
     implementation(files("libs/sherpa-onnx.aar"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")

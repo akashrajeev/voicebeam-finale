@@ -39,6 +39,17 @@ class OfflineExtractorTest {
         assertTrue("Actual target extraction must improve fixture by >3dB",after>before+3)
         assertTrue(raw.exists());out.delete();raw.delete()
     }
+    @Test fun sharedNativeRuntimeLoadsExistingSherpaModels() {
+        val models=com.akashrajeev.voicebeam.ml.AudioModels.load(context.assets)
+        try {
+            val ref=fixture("1089-134686-0013.wav")
+            val embedding=models.voicePrint.embed(ref)
+            assertNotNull("Existing speaker JNI must still load",embedding)
+            assertTrue(embedding!!.all { it.isFinite() })
+            models.asr.accept(ref)
+            assertTrue(models.denoiser.process(FloatArray(models.denoiser.frameShift)).all { it.isFinite() })
+        } finally {models.release()}
+    }
     @Test fun badReferenceLeavesOriginalUntouched() {
         val raw=File(context.cacheDir,"tse-guard.wav");WavWriter(raw,16000).use {it.write(FloatArray(16000){.1f})}
         val out=File(context.cacheDir,"tse-invalid.wav");out.delete()
