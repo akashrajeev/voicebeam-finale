@@ -1,0 +1,21 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+# large model files are fetched by scripts/fetch_models.sh
+app/src/main/assets/models/
+app/libs/*.aar
+
+scripts/__pycache__/
+
+.kotlin/
+keystore/
+*.jks
+*.keystore
+*.p12
+local.properties
