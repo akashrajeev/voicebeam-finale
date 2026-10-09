@@ -27,6 +27,9 @@ fi
 # 2. Speech enhancement (GTCRN, ~0.5 MB)
 [ -f "$ASSETS/gtcrn.onnx" ] || curl -fL -o "$ASSETS/gtcrn.onnx" "$REL/speech-enhancement-models/gtcrn_simple.onnx"
 
+[ -f "$ASSETS/dpdfnet2.onnx" ] || curl -fL -o "$ASSETS/dpdfnet2.onnx" "$REL/speech-enhancement-models/dpdfnet2.onnx"
+printf 'ce35d6025fc71df0ef10d1540e1b7916837bbfe5f6896deb744508d2cad487a9  %s\n' "$ASSETS/dpdfnet2.onnx" | sha256sum -c -
+
 # 3. Speaker embedding (TitaNet Small English, lab trial)
 SPEAKER_ASSET=${VB_SPEAKER_ASSET:-speaker.onnx}
 SPEAKER_URL=${VB_SPEAKER_URL:-$REL/speaker-recongition-models/nemo_en_titanet_small.onnx}
