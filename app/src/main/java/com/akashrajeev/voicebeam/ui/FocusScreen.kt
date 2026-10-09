@@ -259,6 +259,9 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     Text(engine.enrollmentMessage(), color = Color.White, fontSize = 12.sp)
                 }
                 StatusLine(state.lockedId != null, state.lockedSpeaking, state.voiceLearned, state.voiceMatch) { engine.unlock() }
+                if (state.voiceLearned) {
+                    Button(onClick = { engine.clearTargetVoice() }) { Text("Forget target voice") }
+                }
                 if (state.wearerEnrollmentActive) {
                     Text("Learning YOUR voice ${(state.wearerEnrollmentProgress * 100).roundToInt()}%: only you speak. Target learning paused.", color = Muted, fontSize = 12.sp)
                 }
