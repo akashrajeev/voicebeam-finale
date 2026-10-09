@@ -34,6 +34,8 @@ class TargetGate(
     private val releaseMs: Float = 60f,
     private val holdMs: Float = 700f,
 ) {
+    @Volatile var tuning = GateTuning()
+    private var strictHoldLeft = 0f
     var state: TargetState = TargetState.UNLOCKED
         private set
     var quietOthers: Float = 0.8f
@@ -55,13 +57,13 @@ class TargetGate(
             !i.voiceActive -> TargetState.UNCERTAIN
             wearerVeto(i) -> TargetState.OTHER
             // A 3-second query can contain several turns. Only a strong negative vetoes lips.
-            i.audioOnly -> if ((i.voiceMatch ?: 0f) > 0.8f) TargetState.TARGET else if (i.voiceMatch != null && i.voiceMatch < 0.2f) TargetState.OTHER else TargetState.UNCERTAIN
+            i.audioOnly -> if ((i.voiceMatch ?: 0f) > tuning.targetThreshold) TargetState.TARGET else if (i.voiceMatch != null && i.voiceMatch < 0.2f) TargetState.OTHER else TargetState.UNCERTAIN
             i.voiceMatch != null && i.voiceMatch < 0.2f -> if (i.lockedVisible && i.lockedSpeaking > 0.55f) TargetState.UNCERTAIN else TargetState.OTHER
             i.lockedSpeaking > 0.55f && i.othersSpeaking > 0.55f -> TargetState.OVERLAP
             i.othersSpeaking > 0.55f && i.lockedSpeaking < 0.3f -> TargetState.OTHER
             i.lockedVisible && i.lockedSpeaking > 0.55f -> TargetState.TARGET
             !i.lockedVisible -> TargetState.UNCERTAIN
-            (i.voiceMatch ?: 0f) > 0.8f && i.lockedSpeaking > 0.1f -> TargetState.TARGET
+            (i.voiceMatch ?: 0f) > tuning.targetThreshold && i.lockedSpeaking > 0.1f -> TargetState.TARGET
             else -> TargetState.UNCERTAIN
         }
         return when (state) {
@@ -94,6 +96,16 @@ class TargetGate(
             // A short gap may hold the last target turn. It must expire, not retain .95 forever.
             if (holdLeft <= 0f) probability = 0f
         }
+        val strict = tuning
+        val contradictory = state == TargetState.OTHER || state == TargetState.OVERLAP ||
+            !i.voiceLearned || (!i.audioOnly && !i.lockedVisible) || !i.hasLock
+        strictHoldLeft = when {
+            contradictory -> 0f
+            state == TargetState.TARGET && i.voiceActive -> strict.hangoverMs
+            else -> (strictHoldLeft - frameMs).coerceAtLeast(0f)
+        }
+        val strictResidual = strict.strictEnabled && i.hasLock && i.voiceLearned &&
+            i.voiceActive && state == TargetState.UNCERTAIN && strictHoldLeft <= 0f
         val confirmed = !i.hasLock || ((i.audioOnly || i.lockedVisible) &&
             ((i.voiceLearned && i.voiceActive && state == TargetState.TARGET) ||
                 (i.voiceLearned && !i.voiceActive && holdLeft > 0f)))
@@ -109,11 +121,12 @@ class TargetGate(
         val wanted = when {
             !i.hasLock -> 1f
             confirmed -> 1f - strength * (1f - probability)
+            strictResidual -> strict.residualGain
             state == TargetState.UNCERTAIN -> 1f // safe unboosted enhancement passthrough
             state == TargetState.OVERLAP && i.voiceActive -> 1f // cannot separate, preserve speech
             else -> residual
         }
-        val tau = if (wanted > gain) attackMs else releaseMs
+        val tau = if (wanted > gain) attackMs else if (strictResidual) strict.releaseMs else releaseMs
         val alpha = 1f - exp(-frameMs / tau)
         gain += (wanted - gain) * alpha
         return gain
@@ -121,7 +134,7 @@ class TargetGate(
 
     fun reset() {
         state = TargetState.UNLOCKED; probability = 1f; gain = 1f; holdLeft = 0f
-        hadLock = false; boostAllowed = true
+        hadLock = false; boostAllowed = true; strictHoldLeft = 0f
     }
 
     companion object {
