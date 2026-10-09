@@ -52,7 +52,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.weight(1f).statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             Text("Settings", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
-            Text("ENH-7: enhancement and turn suppression, not overlap separation", color = Muted, fontSize = 12.sp)
+            Text("ENH-7: enhanced listening and speaker-turn focus", color = Muted, fontSize = 12.sp)
             Text(engine.enrollmentMessage(), color = Muted, fontSize = 12.sp)
             Text("Uncertain voice passes enhanced audio without boost. Only clear other-speaker evidence turns it down.", color = Muted, fontSize = 12.sp)
             SectionHeader("Listening")

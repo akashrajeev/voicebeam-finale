@@ -1,6 +1,6 @@
 # Architecture (main = ENH-7)
 
-Kotlin, Jetpack Compose, CameraX, MediaPipe Face Landmarker, sherpa-onnx (ONNX Runtime) for the audio models. Everything runs on the phone.
+Kotlin, Jetpack Compose, CameraX, MediaPipe Face Landmarker, sherpa-onnx (ONNX Runtime) for the audio models. Audio and vision inference run on the phone.
 
 Package `com.akashrajeev.voicebeam`:
 
@@ -23,7 +23,7 @@ Package `com.akashrajeev.voicebeam`:
 5. Output goes to earphones only. Route selection prefers A2DP/LE/wired/USB media routes, not call (SCO) mode.
 6. Captions use the raw audio path: Silero VAD cuts utterances, Moonshine Tiny transcribes. The gate state labels who spoke.
 
-## Design rules carried from the lab
+## Pipeline behavior
 
 - Raw audio for captions, enhanced audio for listening.
 - Gate decisions need fresh evidence; stale voice matches expire; a fresh negative match can veto.
