@@ -273,7 +273,7 @@ class VoiceBeamEngine(private val app: Context) {
         p.enrollmentActive = { learner?.enrollmentEnabled == true || wearerLearner?.enrollmentEnabled == true }
         p.enrollmentStatus = { enrollmentMessage() }
         p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
-        p.gateTuning = tuning(s); p.matcherDenoised = s.matcherDenoised
+        p.gateTuning = tuning(s); p.matcherDenoised = s.matcherDenoised; p.captionDenoised = s.captionDenoised
         pipeline = p
         pipelineDebugFeed = wantDebug
         if (wantDebug) {
@@ -331,16 +331,44 @@ class VoiceBeamEngine(private val app: Context) {
         capWallStart = SystemClock.uptimeMillis()
         assembler.reset()
         m.asr.resetStream()
+        val useDpdfCaptions = _settings.value.captionDenoised
         captionThread = Thread({
+            var captionDenoiser = if (useDpdfCaptions) try {
+                com.akashrajeev.voicebeam.ml.CaptionDenoiser(app.assets)
+            } catch (t: Throwable) {
+                Diagnostics.event("caption_dpdfnet2_disabled error=" + t.javaClass.simpleName); null
+            } else null
+            Diagnostics.event("caption_effective=" + (if (captionDenoiser != null) "dpdfnet2" else "raw"))
+            try {
+            var lastDrops = p.droppedCaptionBlocks
             val block = FloatArray(1600)
             var fill = 0
             while (workers.get()) {
                 val packet = p.asrQueue.poll(200) ?: continue
-                val f = packet.samples
+                if (p.droppedCaptionBlocks != lastDrops) {
+                    lastDrops = p.droppedCaptionBlocks
+                    captionDenoiser?.reset(); m.asr.resetStream(); assembler.reset(); fill = 0
+                    Diagnostics.event("caption_discontinuity drops=" + lastDrops)
+                }
+                val f = if (captionDenoiser != null) try {
+                    captionDenoiser!!.process(packet.samples)
+                } catch (t: Throwable) {
+                    Diagnostics.event("caption_dpdfnet2_disabled error=" + t.javaClass.simpleName)
+                    try { captionDenoiser?.release() } catch (_: Throwable) {}
+                    captionDenoiser = null
+                    Diagnostics.event("caption_effective=raw fallback=dpdfnet2_process_error")
+                    // Reset ASR to avoid a mixed-feed partial after a model fault.
+                    m.asr.resetStream(); assembler.reset(); fill = 0
+                    packet.samples
+                } else packet.samples
+                val selected = com.akashrajeev.voicebeam.core.CaptionSource.samples(
+                    packet.samples, f, captionDenoiser != null) ?: continue
+                // Streaming lookahead does not silently substitute RAW.
+                val captionSamples = selected
                 var off = 0
-                while (off < f.size) {
-                    val n = minOf(f.size - off, block.size - fill)
-                    System.arraycopy(f, off, block, fill, n); fill += n; off += n
+                while (off < captionSamples.size) {
+                    val n = minOf(captionSamples.size - off, block.size - fill)
+                    System.arraycopy(captionSamples, off, block, fill, n); fill += n; off += n
                     if (fill == block.size) {
                         val speechy = packet.voiceActive
                         val asrStart = SystemClock.elapsedRealtimeNanos()
@@ -348,7 +376,7 @@ class VoiceBeamEngine(private val app: Context) {
                             Diagnostics.event("asr_error=" + t.javaClass.simpleName); Pair("", false)
                         }
                         if (++diagnosticAsrBlocks % 10 == 0) Diagnostics.event("asrUs=" + (SystemClock.elapsedRealtimeNanos() - asrStart) / 1000 + " queue=" + p.asrQueue.size)
-                        assembler.advanceTo(maxOf(0L, packet.captureMs * SAMPLE_RATE / 1000 - (f.size - off) - block.size))
+                        assembler.advanceTo(maxOf(0L, packet.captureMs * SAMPLE_RATE / 1000 - (captionSamples.size - off) - block.size))
                         val seg = assembler.onBlock(block.size, text, ended, packet.probability, speechy)
                         fill = 0
                         publishCaption(seg)
@@ -360,6 +388,7 @@ class VoiceBeamEngine(private val app: Context) {
                     }
                 }
             }
+            } finally { try { captionDenoiser?.release() } catch (_: Throwable) {} }
         }, "vb-captions").also { it.start() }
         voiceThread = Thread({
             while (workers.get()) {
@@ -425,6 +454,11 @@ class VoiceBeamEngine(private val app: Context) {
         val s = f(old)
         _settings.value = s
         settingsStore.save(s)
+        if (s.captionDenoised != old.captionDenoised && pipeline != null) {
+            // Recreate the ASR stream instead of mixing sources in one utterance.
+            stopListening()
+            Diagnostics.event("caption_input_changed_restart_required")
+        }
         if (s.matcherDenoised != old.matcherDenoised) {
             // Never compare a template captured on one feed with queries from another.
             // Stop workers before changing the feed to avoid cross-feed query races.
@@ -432,7 +466,7 @@ class VoiceBeamEngine(private val app: Context) {
             clearTargetVoice(); clearWearerVoice()
             Diagnostics.event("matcher_input_changed_relearn_required")
         }
-        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise; it.gateTuning = tuning(s); it.matcherDenoised = s.matcherDenoised }
+        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise; it.gateTuning = tuning(s); it.matcherDenoised = s.matcherDenoised; it.captionDenoised = s.captionDenoised }
         if (s.stageEnabled != old.stageEnabled) applyStage(s.stageEnabled)
         if (s.useSceneMic != old.useSceneMic && pipeline != null) { stopListening(); startListening() }
         // Demo feed toggles swap the audio source too (recorded wav vs mic).
