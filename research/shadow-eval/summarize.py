@@ -2,14 +2,17 @@
 import json,collections,csv
 from pathlib import Path
 root=Path(__file__).resolve().parent
-rows=json.loads((root/'shadow_results.json').read_text())
+rows=list(csv.DictReader((root/'shadow_results.csv').open()))
+for r in rows:
+    for k in ['stoi','si_sdr','rms','residual_db','clipped_fraction']:
+        if r.get(k,'')!='':r[k]=float(r[k])
 g=collections.defaultdict(dict)
 for r in rows:g[(r['kind'],str(r['snr']),r['case'])][r['variant']]=r
 s=collections.defaultdict(list)
 for (kind,snr,case),vs in g.items():
     f=vs['fixed_0.7']; a=vs['adaptive_shadow']; n=vs['noise_floor_no_action']
     for k in ['stoi','si_sdr','rms','residual_db']:
-        if k in f: assert f[k]==n[k],(case,k)
+        if f.get(k,'')!='': assert f[k]==n[k],(case,k)
     s[(kind,snr)].append(vs)
 lines=['# VoiceBeam offline shadow replay - October 10, 2026','',
 'Adaptive mix is a tradeoff, not a general win. It improves target-plus-noise SI-SDR at low SNR, barely lowers STOI, and loses both metrics at high SNR and in overlap. Noise-only gaps get lower digital residual energy. A fixed fully-wet control explains most low-SNR and gap gains. The noise-floor helper does not control audio, so its scores equal fixed behavior exactly.','',
