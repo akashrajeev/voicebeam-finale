@@ -51,16 +51,11 @@ printf '%s\n' '0ec8bc3971bbb8a804b4b53910e8cad3626b9db6b4c44167eba9b669f58f0584 
 # Offline SpeakerBeam is committed as a pinned single-file ONNX, never silently skipped.
 printf '%s\n' 'e9bdb6c0a8e51b8341435f49abe59ead136cd2b9d6b6c178990fdc50bf54c9eb  app/src/main/assets/models/speakerbeam-8k.onnx' | sha256sum -c -
 
-# Java ORT JNI uses the existing newer sherpa ORT C API runtime (backward-compatible API20).
-# Remove only the older duplicate core, keep ORT Java JNI/classes. Runtime tests exercise both.
+# Isolate Java ORT1.20 core+JNI, retain sherpa1.28.2 core unchanged.
 ORT_AAR=app/libs/onnxruntime-java-jni.aar
 if [ ! -f "$ORT_AAR" ]; then
   curl -fL -o /tmp/ort-java-source.aar https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.20.0/onnxruntime-android-1.20.0.aar
   echo '07a8f71ef890afed8c6087a56220e6d558a492804276ee2dd7cb7f6262242027  /tmp/ort-java-source.aar' | sha256sum -c -
-  python3 - <<'PYORT'
-import zipfile
-with zipfile.ZipFile('/tmp/ort-java-source.aar') as src, zipfile.ZipFile('app/libs/onnxruntime-java-jni.aar','w',zipfile.ZIP_DEFLATED) as dst:
-    for item in src.infolist():
-        if not item.filename.endswith('/libonnxruntime.so'): dst.writestr(item,src.read(item.filename))
-PYORT
+  python3 -m pip install patchelf==0.17.2.4
+  python3 scripts/isolate_ort.py
 fi
