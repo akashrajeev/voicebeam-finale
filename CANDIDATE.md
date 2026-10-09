@@ -42,3 +42,38 @@ The second phone log's main target-blocking condition was raw VAD false in86/89
 sampled frames. These changes do not fix that, embedding contamination/calibration,
 or mixed-voice separation. Do not call the candidate demo-ready before controlled
 same-headset target-alone/other-alone/offcamera/overlap retest, with raw/video/log.
+
+# experiment-3 additions (off experiment-2 944110e)
+
+Strict focus defaults ON in app Settings, residual amplitude0.2, hangover700ms,
+voice threshold0.8. Runtime Settings controls persist and update the running gate.
+GateTuning defaults strictOFF for legacy direct gate/replay callers; app explicitly
+supplies Settings. Existing98 tests retained;5 new strict/config tests,103 total.
+
+Learned speech-active UNCERTAIN settles to residual only after a bounded recent
+TARGET hangover. Rise remains25ms; strict fall250ms. OTHER evidence, overlap,
+face loss, unlock/unlearned clear hangover. Quiet frames pass unboosted as before;
+explicit OTHER retains quietOthers attenuation. Overlap passes mixed audio.
+Target hangover protects gain, NOT boosts ambiguous active speech. State enum
+stays UNCERTAIN while attenuated; do not infer output gain from state alone.
+
+Matcher defaults to RAW; the toggle selects pure denoised PREgate/PREboost audio, independent of hearing
+mix slider. Both enrollment and query use the selected feed. Denoised is a runtime comparison switch;
+changing it STOPS listening and clears BOTH templates, then user must restart and
+relearn. Raw VAD still chooses query eligibility, with existing lips/energy fallback.
+Captions and raw recording remain RAW. Denoising can DAMAGE identity cues; no
+recorded-scene bake-off proves it better. Warmup empty denoised frames are skipped.
+
+SpeakerProfile.DEFAULT binds asset models/speaker.onnx and cosine remap(.25,.60)
+for both target/wearer scores; change this one profile with the packaged candidate
+asset+measured calibration. TitaNet Small still shipped; no CAM++/ERes2Net winner
+invented. fetch_models.sh supports VB_SPEAKER_URL/VB_SPEAKER_ASSET for packaging.
+Changing asset/calibration requires model reload/build; gate sliders do NOT.
+
+Risks: strict focus can mute target on failed match or face loss; VAD misses still
+pass unknown speech because strict only acts on detected speech. Explicit OTHER
+may mute an overlapping target; no source separation. Enrollment phrase count/UI
+unchanged. Android compilation/Settings pixels still pending CI/device. No main
+merge. Test original recording before declaring a hearing improvement.
+
+Proxy bake-off reported by research: TitaNet gap0.669 raw vs0.485 GTCRN and0.578 DPDFNet-2. Therefore RAW stays default; denoising is not assumed better. Synthetic proxy, not this room. Enroll/test RAW first, then toggle denoised, restart/relearn and repeat.
