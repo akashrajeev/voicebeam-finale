@@ -119,8 +119,8 @@ class VoiceBeamEngine(private val app: Context) {
             try {
                 val m = AudioModels.load(app.assets)
                 models = m
-                learner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)
-                wearerLearner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)
+                learner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE, profile = m.voicePrint.profile)
+                wearerLearner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE, profile = m.voicePrint.profile)
                 Diagnostics.event("models_ready")
                 _state.update { it.copy(modelsReady = true) }
             } catch (t: Throwable) {
@@ -273,6 +273,7 @@ class VoiceBeamEngine(private val app: Context) {
         p.enrollmentActive = { learner?.enrollmentEnabled == true || wearerLearner?.enrollmentEnabled == true }
         p.enrollmentStatus = { enrollmentMessage() }
         p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
+        p.gateTuning = tuning(s); p.matcherDenoised = s.matcherDenoised
         pipeline = p
         pipelineDebugFeed = wantDebug
         if (wantDebug) {
@@ -391,7 +392,7 @@ class VoiceBeamEngine(private val app: Context) {
                     val query = l.lastQueryEmbedding
                     val wearerTemplate = wearer?.centroid
                     latestWearerMatch = if (query != null && wearerTemplate != null)
-                        com.akashrajeev.voicebeam.core.VoiceMatch.score(com.akashrajeev.voicebeam.core.VoiceMatch.cosine(query, wearerTemplate)) else null
+                        m.voicePrint.profile.score(com.akashrajeev.voicebeam.core.VoiceMatch.cosine(query, wearerTemplate)) else null
                 }
                 if (BuildConfig.DEBUG && (!wasLearned && l.learned || score != null)) Log.i("VoiceBeamEngine", "voice: learned=" + l.learned + " progress=" + l.progress + " score=" + score + " lip=" + lip)
                 if (l.learned != _state.value.voiceLearned || score != null || l.progress != _state.value.voiceEnrollmentProgress || l.enrollmentEnabled != _state.value.voiceEnrollmentActive) {
@@ -415,12 +416,23 @@ class VoiceBeamEngine(private val app: Context) {
 
     // ---------- settings ----------
 
+    private fun tuning(s: Settings) = com.akashrajeev.voicebeam.core.GateTuning(
+        strictEnabled = s.strictFocus, residualGain = s.strictResidual,
+        hangoverMs = s.strictHangoverMs, targetThreshold = s.targetMatchThreshold).sanitized()
+
     fun updateSettings(f: (Settings) -> Settings) {
         val old = _settings.value
         val s = f(old)
         _settings.value = s
         settingsStore.save(s)
-        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise }
+        if (s.matcherDenoised != old.matcherDenoised) {
+            // Never compare a template captured on one feed with queries from another.
+            // Stop workers before changing the feed to avoid cross-feed query races.
+            if (pipeline != null) stopListening()
+            clearTargetVoice(); clearWearerVoice()
+            Diagnostics.event("matcher_input_changed_relearn_required")
+        }
+        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise; it.gateTuning = tuning(s); it.matcherDenoised = s.matcherDenoised }
         if (s.stageEnabled != old.stageEnabled) applyStage(s.stageEnabled)
         if (s.useSceneMic != old.useSceneMic && pipeline != null) { stopListening(); startListening() }
         // Demo feed toggles swap the audio source too (recorded wav vs mic).
