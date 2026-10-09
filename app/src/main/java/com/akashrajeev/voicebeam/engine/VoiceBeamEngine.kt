@@ -294,7 +294,7 @@ class VoiceBeamEngine(private val app: Context) {
         pipeline?.stop(); pipeline = null
         captionThread?.join(1500); voiceThread?.join(1500)
         captionThread = null; voiceThread = null
-        _state.update { it.copy(listening = false, partial = "", inputLevel = 0f) }
+        _state.update { it.copy(listening = false, partial = "", inputLevel = 0f, proofTelemetry = null) }
         lifecycle.finishStop()
     }
 
@@ -401,6 +401,13 @@ class VoiceBeamEngine(private val app: Context) {
             val segs = if (seg != null) (it.segments + seg).takeLast(200) else it.segments
             it.copy(segments = segs, partial = assembler.partial, partialIsTarget = assembler.partialIsTarget)
         }
+    }
+
+    /** Stub bridge: no producer wired yet. Akash owns the AudioPipeline 1 Hz hook.
+     * Immutable values only; call from diagnostics cadence, never per-frame UI updates.
+     */
+    fun acceptProofTelemetry(snapshot: com.akashrajeev.voicebeam.core.ProofTelemetry) {
+        _state.update { if (it.listening) it.copy(proofTelemetry = snapshot) else it }
     }
 
     fun clearCaptions() = _state.update { it.copy(segments = emptyList(), partial = "") }
