@@ -35,7 +35,10 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: VB_EMULATOR=1 ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OfflineExtractorTest -Dorg.gradle.jvmargs="-Xmx3g"
+          script: |
+            VB_EMULATOR=1 ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineSessionsUiTest -Dorg.gradle.jvmargs="-Xmx3g"
+            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/offline-sessions-ui.png offline-sessions-ui.png
+            adb logcat -d -s TseTest:I > offline-extractor-log.txt
       - name: Restore arm64 phone APK after x86 emulator validation
         run: ./gradlew --no-daemon assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
       - name: Report exact source metadata and tests
@@ -69,6 +72,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: enh-exp-ver6-extract-${{ github.sha }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            offline-sessions-ui.png
+            offline-extractor-log.txt
           retention-days: 1
           if-no-files-found: error
