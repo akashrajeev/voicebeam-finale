@@ -19,6 +19,14 @@ class FaceLossSafetyTest {
         assertNotEquals(id, tracker.lockAt(.4f, .4f, 7100))
         tracker.unlock(); assertNull(tracker.lockedId)
     }
+    @Test fun returningFaceAfterLongGapCannotInheritOldIdWithoutRetap() {
+        val tracker = FaceTracker()
+        tracker.update(1000, listOf(face))
+        val id = tracker.lockAt(.4f, .4f, 1000)
+        tracker.update(8000, listOf(face))
+        assertEquals(id, tracker.lockedId)
+        assertFalse(tracker.snapshot(8000).any { it.id == id })
+    }
     @Test fun missingTargetIgnoresStrongNegativeAndPositiveScores() {
         for (match in listOf(0f, 1f)) {
             val gate = TargetGate()

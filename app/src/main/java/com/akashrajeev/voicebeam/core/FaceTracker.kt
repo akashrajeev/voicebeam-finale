@@ -28,6 +28,12 @@ class FaceTracker(
 
     @Synchronized
     fun update(timeMs: Long, faces: List<FaceObservation>): List<TrackedFace> {
+        val lockedTrack = tracks.firstOrNull { it.id == lockedId }
+        if (lockedTrack != null && timeMs - lockedTrack.lastSeen > forgetAfterMs * 4) {
+            tracks.remove(lockedTrack)
+            // Retain the user's explicit target intent, not the stale face geometry.
+            // A new face cannot inherit this missing target's ID; retap or unlock is required.
+        }
         val unmatched = tracks.toMutableList()
         for (f in faces.sortedByDescending { it.box.width * it.box.height }) {
             val best = unmatched.minByOrNull { hypot(it.box.cx - f.box.cx, it.box.cy - f.box.cy) }
@@ -43,12 +49,6 @@ class FaceTracker(
             t.lips.add(timeMs, f.mouthOpenness)
         }
         tracks.removeAll { timeMs - it.lastSeen > forgetAfterMs && it.id != lockedId }
-        val lockedTrack = tracks.firstOrNull { it.id == lockedId }
-        if (lockedTrack != null && timeMs - lockedTrack.lastSeen > forgetAfterMs * 4) {
-            tracks.remove(lockedTrack)
-            // Retain the user's explicit target intent, not the stale face geometry.
-            // A new face cannot inherit this missing target's ID; retap or unlock is required.
-        }
         return snapshot(timeMs)
     }
 
