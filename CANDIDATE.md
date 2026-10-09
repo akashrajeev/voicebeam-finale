@@ -77,3 +77,19 @@ unchanged. Android compilation/Settings pixels still pending CI/device. No main
 merge. Test original recording before declaring a hearing improvement.
 
 Proxy bake-off reported by research: TitaNet gap0.669 raw vs0.485 GTCRN and0.578 DPDFNet-2. Therefore RAW stays default; denoising is not assumed better. Synthetic proxy, not this room. Enroll/test RAW first, then toggle denoised, restart/relearn and repeat.
+
+
+# experiment-5: ERes2Net base200k, untuned room comparison
+
+Base experiment-3 e8e30ce. Same strict defaults, RAW matcher, no phrase/UI changes.
+Asset3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx via sherpa-onnx,
+packaged models/eres2net_base.onnx. Exact extraction compatibility requires native
+CI and phone; this zh-cn model may behave differently on English/accented speech.
+
+Initial remaplow.25/high.55; runtimebar.8 => cosine.49. Relayed noisyhall proxy
+minTarget/maxOther: hallA.644/.233,hallB.828/.266,hallC.788/.326. Cosine.49 lies
+between worst impostor.326 and worst target.644 in those cases, not proof on this
+room. Marked UNTUNED until actualsame-person/other-person falseaccept/reject checks.
+Proxy pick on these cases, not guaranteed winner. Stronglip TARGETfallback still
+exists independently of voicebar. Same fixed mic/volume/clean3phrase enrollment,
+targetsolo/otheron/offcamera/overlap protocol; compare first toexperiment-3RAW.
