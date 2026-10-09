@@ -22,3 +22,7 @@ Sources:
 - https://github.com/Rikorose/DeepFilterNet
 
 Weights modelSHA5600b6857117ecc7cf460b8ec4841963bfa6d718921d424d42dea5d3d37a8c32. Binary hash is recorded in fetch_models.sh and checked in CI.
+
+## ver3b packaging fix
+
+Actual ver3APK matched runner hash but its model became assets/models/dfn3-mobile.tar,8621056bytes. Android asset packaging stripped .gz and decompressed payload. Source expected .tar.gz,7984565gzipbytes,so opens wrong path before native startup. ver3b111->112renames model to.bin and disablescompressionbin. CI reads actualAPKandassertsgzipmagic+exactmodelandJNIsha. Persistenthearing_statusheaderretainsstageandfailureclass/messageevenafter300lineRAMringrolls. Phoneexecutionstillrequiresnewtrial.

@@ -20,8 +20,8 @@ android {
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 111
-        versionName = "ENH-exp-ver3"
+        versionCode = 112
+        versionName = "ENH-exp-ver3b"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
@@ -63,7 +63,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
-    androidResources { noCompress += listOf("onnx", "task", "txt") }
+    androidResources { noCompress += listOf("onnx", "task", "txt", "bin") }
     packaging {
         jniLibs { useLegacyPackaging = true }
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }

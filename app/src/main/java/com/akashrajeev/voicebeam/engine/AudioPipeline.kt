@@ -171,9 +171,12 @@ class AudioPipeline(
                 catch (_: Throwable) {} // optional telemetry must never stop hearing
             }
         }
-        var dfn: DfnHearing? = try { DfnHearing(app.assets).also {
+        var dfnStage="starting"
+        Diagnostics.backend("stage=starting abi="+android.os.Build.SUPPORTED_ABIS.joinToString(",")+" sdk="+android.os.Build.VERSION.SDK_INT)
+        var dfn: DfnHearing? = try { DfnHearing(app.assets) { dfnStage=it;Diagnostics.backend(it) }.also {
             Diagnostics.event("hearingBackend=DFN3 nativeHop48k=480 adapterDelayMs=16")
         } } catch (t: Throwable) {
+            Diagnostics.backend("backend=GTCRN failed="+dfnStage+" error="+t.javaClass.simpleName+":"+t.message+" cause="+t.cause?.message)
             reportFallback("dfn_load_" + t.javaClass.simpleName); null
         }
         var dfnUs = 0L
@@ -233,6 +236,7 @@ class AudioPipeline(
                             }
                         } catch (t: Throwable) {
                             try { candidate.close() } catch (_: Throwable) {}
+                            Diagnostics.backend("backend=GTCRN stage=process error="+t.javaClass.simpleName+":"+t.message)
                             dfn = null; models.denoiser.reset(); alignment.reset(); alignment.push(input)
                             reportFallback("dfn_process_" + t.javaClass.simpleName)
                             models.denoiser.process(denoiseIn)

@@ -1,8 +1,8 @@
-name: enh-exp-ver3 validation and APK
+name: enh-exp-ver3b validation and APK
 # One approved branch build on this workflow edit; subsequent source builds require approval.
 on:
   push:
-    branches: [enh-exp-ver3]
+    branches: [enh-exp-ver3b]
     paths: ['.github/workflows/fix-apk.yml']
   workflow_dispatch:
 permissions:
@@ -31,6 +31,14 @@ jobs:
           config = pathlib.Path('app/build/generated/source/buildConfig/debug/com/akashrajeev/voicebeam/BuildConfig.java').read_text()
           assert 'LAB_COMMIT = "' + sha + '";' in config
           print('BuildConfig source commit verified: ' + sha)
+          import zipfile,hashlib
+          with zipfile.ZipFile('app/build/outputs/apk/debug/app-debug.apk') as apk:
+              model=apk.read('assets/models/dfn3-mobile.bin')
+              assert model[:2]==b'\x1f\x8b'
+              assert hashlib.sha256(model).hexdigest()=='5600b6857117ecc7cf460b8ec4841963bfa6d718921d424d42dea5d3d37a8c32'
+              native=apk.read('lib/arm64-v8a/libdf.so')
+              assert hashlib.sha256(native).hexdigest()=='0ec8bc3971bbb8a804b4b53910e8cad3626b9db6b4c44167eba9b669f58f0584'
+              print('APK DFN gzip model and arm64 JNI bytes verified')
           roots = [E.parse(p).getroot() for p in glob.glob('app/build/test-results/testDebugUnitTest/*.xml')]
           tests = sum(int(r.attrib['tests']) for r in roots)
           failures = sum(int(r.attrib.get('failures', '0')) + int(r.attrib.get('errors', '0')) for r in roots)
@@ -41,7 +49,7 @@ jobs:
       - name: Upload candidate APK
         uses: actions/upload-artifact@v4
         with:
-          name: enh-exp-ver3-${{ github.sha }}
+          name: enh-exp-ver3b-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 1
           if-no-files-found: error
