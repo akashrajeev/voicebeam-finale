@@ -28,7 +28,9 @@ fi
 [ -f "$ASSETS/gtcrn.onnx" ] || curl -fL -o "$ASSETS/gtcrn.onnx" "$REL/speech-enhancement-models/gtcrn_simple.onnx"
 
 # 3. Speaker embedding (TitaNet Small English, lab trial)
-[ -f "$ASSETS/speaker.onnx" ] || curl -fL -o "$ASSETS/speaker.onnx" "$REL/speaker-recongition-models/nemo_en_titanet_small.onnx"
+SPEAKER_ASSET=${VB_SPEAKER_ASSET:-speaker.onnx}
+SPEAKER_URL=${VB_SPEAKER_URL:-$REL/speaker-recongition-models/nemo_en_titanet_small.onnx}
+[ -f "$ASSETS/$SPEAKER_ASSET" ] || curl -fL -o "$ASSETS/$SPEAKER_ASSET" "$SPEAKER_URL"
 
 # 4. Face + lip landmarks (MediaPipe Face Landmarker)
 [ -f "$ASSETS/face_landmarker.task" ] || curl -fL -o "$ASSETS/face_landmarker.task" "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
