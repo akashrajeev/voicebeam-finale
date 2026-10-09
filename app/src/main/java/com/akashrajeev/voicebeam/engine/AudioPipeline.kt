@@ -162,6 +162,14 @@ class AudioPipeline(
         val denoiseIn = FloatArray(frameShift)
         val envelope = com.akashrajeev.voicebeam.core.ListenEnvelope(SAMPLE_RATE)
         val alignment = DenoiseAlignment(maxOf(4096, frameShift * 8))
+        val hearingMix = com.akashrajeev.voicebeam.core.HearingMix(SAMPLE_RATE)
+        val denoiseFallback = com.akashrajeev.voicebeam.core.FallbackCounter()
+        fun reportFallback(kind: String) {
+            if (denoiseFallback.record(SystemClock.uptimeMillis())) {
+                try { Diagnostics.event("denoise_fallback=" + kind + " count=" + denoiseFallback.count) }
+                catch (_: Throwable) {} // optional telemetry must never stop hearing
+            }
+        }
         var clean = FloatArray(frameShift)
         var gated = FloatArray(frameShift)
         var out = FloatArray(frameShift)
@@ -207,11 +215,17 @@ class AudioPipeline(
                 val denoiseStart = SystemClock.elapsedRealtimeNanos()
                 System.arraycopy(input, 0, denoiseIn, 0, input.size)
                 alignment.push(input)
-                val denoised = try { models.denoiser.process(denoiseIn) } catch (t: Throwable) {
+                val denoised = try {
+                    val result = models.denoiser.process(denoiseIn)
+                    if (!com.akashrajeev.voicebeam.core.DenoiseOutput.valid(result, input.size)) {
+                        reportFallback("invalid_output")
+                        alignment.reset(); alignment.push(input); input
+                    } else result
+                } catch (t: Throwable) {
+                    reportFallback(t.javaClass.simpleName)
                     alignment.reset(); alignment.push(input); input
                 }
                 val n = minOf(denoised.size, input.size)
-                val mix = denoiseMix
                 if (n == 0) {
                     asrQueue.offer(CaptionBlock(input.copyOf(), capturedSamples * 1000 / SAMPLE_RATE,
                         gate.probability, rmsForCaption(input) > .005f))
@@ -219,18 +233,9 @@ class AudioPipeline(
                     continue
                 }
                 if (clean.size < n) { clean = FloatArray(n); gated = FloatArray(n); out = FloatArray(n) }
-                // Streaming GTCRN has one warmup frame. Mix the matching buffered raw samples.
-                alignment.mix(denoised, mix, clean, n)
-
                 val vadStart = SystemClock.elapsedRealtimeNanos()
-                // Identity/detection sees the same raw mic as enrollment, not hearing denoise.
+                // Identity/detection stays on raw mic, identical to main enrollment/query.
                 val voice = vad.isVoice(input)
-                val cleanVadStart = SystemClock.elapsedRealtimeNanos()
-                val cleanVadProbability = cleanVad.sample {
-                    it.isVoice(clean.let { if (it.size == n) it else it.copyOf(n) })
-                    it.probability
-                }
-                val cleanVadUs = (SystemClock.elapsedRealtimeNanos() - cleanVadStart) / 1000
                 val rawRms = rmsForCaption(input)
                 val gateStart = SystemClock.elapsedRealtimeNanos()
                 val s = signals()
@@ -238,6 +243,16 @@ class AudioPipeline(
                 val observation = com.akashrajeev.voicebeam.core.SpeechObservation.observe(
                     enrollmentActive(), voice, rawRms, s)
                 val g = gate.process(observation.inputs)
+                val gateEnd = SystemClock.elapsedRealtimeNanos()
+                // Use the existing aligned dry branch. Policy changes hearing, not attribution.
+                val mix = hearingMix.next(denoiseMix, observation.inputs, gate.state, n)
+                alignment.mix(denoised, mix, clean, n)
+                val cleanVadStart = SystemClock.elapsedRealtimeNanos()
+                val cleanVadProbability = cleanVad.sample {
+                    it.isVoice(clean.let { if (it.size == n) it else it.copyOf(n) })
+                    it.probability
+                }
+                val cleanVadUs = (SystemClock.elapsedRealtimeNanos() - cleanVadStart) / 1000
                 val requestedBoost = if (gate.boostAllowed) TargetGate.dbToLinear(boostDb) else 1f
                 val boost = FrameDsp.safeBoost(clean, n, g, requestedBoost) // diagnostic estimate; envelope limits actual output
                 val e = envelope.process(clean, n, g, requestedBoost, gated, out)
@@ -287,12 +302,13 @@ class AudioPipeline(
                         " vad=" + voice + " rawVadProb=" + vad.probability + " cleanVadProb=" + cleanVadProbability + " cleanVadUs=" + cleanVadUs +
                         " queryFallback=" + (!voice && observation.queryWeight != null) +
                         " playbackUnderruns=" + track?.underrunCount +
-                        " denoiseMix=" + denoiseMix + " visionAgeMs=" + s.visionAgeMs +
+                        " denoiseMix=" + denoiseMix + " hearingMix=" + mix + " hearingMixTarget=" + hearingMix.requested +
+                        " denoiseFallbacks=" + denoiseFallback.count + " visionAgeMs=" + s.visionAgeMs +
                         " voiceQueue=" + voiceQueue.size + " droppedVoiceBlocks=" + voiceQueue.dropped +
                         " audioProcessUptimeMs=" + SystemClock.uptimeMillis() + " written=" + written +
                         " denoiseUs=" + (vadStart - denoiseStart) / 1000 +
                         " vadUs=" + (gateStart - vadStart) / 1000 +
-                        " gateUs=" + (playStart - gateStart) / 1000 +
+                        " gateUs=" + (gateEnd - gateStart) / 1000 +
                         " playbackUs=" + (end - playStart) / 1000 +
                         " droppedCaptionBlocks=" + asrQueue.dropped)
                     lastDiagnosticMs = now
