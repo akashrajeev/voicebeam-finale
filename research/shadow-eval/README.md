@@ -19,7 +19,7 @@ Compile from the repository root:
     kotlinc app/src/main/java/com/akashrajeev/voicebeam/core/{TargetGate,ProofTelemetry}.kt research/shadow-eval/PolicyReplay.kt -include-runtime -d ROOT/policy-replay.jar
     python3 research/shadow-eval/evaluate.py --root ROOT --jar ROOT/policy-replay.jar
 
-Copy ROOT/results/shadow_results.{csv,json} into this folder, then run summarize.py.
+Copy ROOT/results/shadow_results.csv into this folder, then run summarize.py.
 Primary adaptive replay uses synthetic gates and measured raw Silero probabilities.
 Oracle sensitivity is explicitly marked. Fixed1.0 isolates simply increasing wet mix.
 No noise-floor suppression rule is invented. RTF excludes metrics/JVM replay/VAD.
