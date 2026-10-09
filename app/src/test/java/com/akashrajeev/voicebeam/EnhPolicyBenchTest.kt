@@ -17,7 +17,7 @@ class EnhPolicyBenchTest {
             repeat(400){gate.process(i);if(gate.gain<.1f)falseMute++;if(gate.boostAllowed)boost++}
             println("ENH_POLICY scripted=$name gain=${gate.gain} attenuationDb=${20*log10(gate.gain)} below10percent=$falseMute/400 boosted=$boost/400")
             if(name=="other")assertTrue(gate.gain<.041f) else assertEquals(0,falseMute)
-            if(name!="target")assertFalse(gate.boostAllowed)
+            if(name=="target" || name=="incomplete")assertTrue(gate.boostAllowed) else assertFalse(gate.boostAllowed)
         }
     }
 }
