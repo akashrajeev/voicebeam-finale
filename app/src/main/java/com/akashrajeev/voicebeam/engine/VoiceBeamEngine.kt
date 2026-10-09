@@ -28,7 +28,10 @@ import com.akashrajeev.voicebeam.ml.SAMPLE_RATE
 import com.akashrajeev.voicebeam.record.MediaExporter
 import com.akashrajeev.voicebeam.record.SessionMeta
 import com.akashrajeev.voicebeam.record.SessionStore
+import com.akashrajeev.voicebeam.separation.OnnxStreamingExtractor
 import com.akashrajeev.voicebeam.stage.StageServer
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -75,6 +78,7 @@ class VoiceBeamEngine(private val app: Context) {
     private var captionThread: Thread? = null
     private var voiceThread: Thread? = null
     private var stage: StageServer? = null
+    private var tseExtractor: OnnxStreamingExtractor? = null
 
     @Volatile private var latestProbability = 1f
     @Volatile private var latestVoiceMatch: Float? = null
@@ -121,6 +125,22 @@ class VoiceBeamEngine(private val app: Context) {
         }
     }
 
+    private fun loadTseModel(): OnnxStreamingExtractor? {
+        return try {
+            val bytes = app.assets.open("models/tse/tse_prod_48k.onnx").use { it.readBytes() }
+            val env = OrtEnvironment.getEnvironment()
+            val options = OrtSession.SessionOptions().apply {
+                setIntraOpNumThreads(1)
+                setInterOpNumThreads(1)
+            }
+            val session = env.createSession(bytes, options)
+            OnnxStreamingExtractor(env, session)
+        } catch (t: Throwable) {
+            Log.w(TAG, "TSE model load failed", t)
+            null
+        }
+    }
+
     fun loadModels() {
         if (models != null || _state.value.modelError != null) return
         if (!loadingModels.compareAndSet(false, true)) return
@@ -128,6 +148,15 @@ class VoiceBeamEngine(private val app: Context) {
             try {
                 val m = AudioModels.load(app.assets)
                 models = m
+                if (tseBundlePresent) {
+                    try {
+                        tseExtractor = loadTseModel()
+                        Diagnostics.event("tse_model_loaded=" + (tseExtractor != null))
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "TSE model optional load failed", t)
+                        Diagnostics.event("tse_load_error=" + t.javaClass.simpleName)
+                    }
+                }
                 learner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)
                 wearerLearner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)
                 Diagnostics.event("models_ready")
@@ -280,6 +309,7 @@ class VoiceBeamEngine(private val app: Context) {
         // enh-exp: extraction stage toggle. The only bundled extractor is the
         // passthrough, so enabling without a model bundle changes nothing audible.
         p.tseStage.enabled = s.tseExperiment
+        tseExtractor?.let { p.tseStage.extractor = it }
         Diagnostics.event("tse experiment=" + s.tseExperiment + " modelPresent=" + tseBundlePresent +
             " extractor=" + p.tseStage.extractor.name)
         pipeline = p
@@ -324,6 +354,8 @@ class VoiceBeamEngine(private val app: Context) {
         stopListening()
         val m = models ?: return
         models = null; learner = null; wearerLearner = null; clearWearerVoice()
+        try { tseExtractor?.release() } catch (t: Throwable) { Log.w(TAG, "tse release failed", t) }
+        tseExtractor = null
         try { m.release() } catch (t: Throwable) { Log.w(TAG, "model release failed", t) }
         _state.update { it.copy(modelsReady = false) }
     }

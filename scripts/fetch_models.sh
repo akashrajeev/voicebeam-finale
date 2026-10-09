@@ -30,7 +30,13 @@ fi
 # 3. Speaker embedding (TitaNet Small English, lab trial)
 [ -f "$ASSETS/speaker.onnx" ] || curl -fL -o "$ASSETS/speaker.onnx" "$REL/speaker-recongition-models/nemo_en_titanet_small.onnx"
 
-# 4. Face + lip landmarks (MediaPipe Face Landmarker)
+# 4. Target speech extraction (tse-conv-tasnet-48k, CC BY 4.0)
+TSE_DIR="$ASSETS/tse"
+mkdir -p "$TSE_DIR"
+[ -f "$TSE_DIR/tse_prod_48k.onnx" ] || curl -fL -o "$TSE_DIR/tse_prod_48k.onnx" \
+  "https://huggingface.co/penta2himajin/tse-conv-tasnet-48k/resolve/main/tse_prod_48k.onnx"
+
+# 5. Face + lip landmarks (MediaPipe Face Landmarker)
 [ -f "$ASSETS/face_landmarker.task" ] || curl -fL -o "$ASSETS/face_landmarker.task" "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 
 # Noisy sample for the instrumented denoiser test
