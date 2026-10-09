@@ -4,6 +4,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Label the checked-out source, not the event that requested a build.
+val sourceCommit = providers.exec {
+    commandLine("git", "rev-parse", "HEAD")
+}.standardOutput.asText.get().trim().also {
+    require(it.matches(Regex("[0-9a-f]{40}"))) { "Cannot determine checked-out source commit" }
+}
+
 android {
     namespace = "com.akashrajeev.voicebeam"
     compileSdk = 35
@@ -12,8 +19,8 @@ android {
         applicationId = "com.akashrajeev.voicebeam.finale"
         minSdk = 26
         targetSdk = 35
-        buildConfigField("String", "LAB_COMMIT", "\"" + (System.getenv("GITHUB_SHA") ?: "local") + "\"")
-        versionCode = 106
+        buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
+        versionCode = 108
         versionName = "ENH-7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

@@ -17,7 +17,7 @@ class DiagnosticLogTest {
         assertEquals("", log.snapshot())
     }
     @Test fun oversizedLineIsBounded() {
-        val log = DiagnosticLog(); log.add("x".repeat(1000))
-        assertEquals(700, log.snapshot().length)
+        val log = DiagnosticLog(); log.add("x".repeat(3000))
+        assertEquals(2048, log.snapshot().length)
     }
 }

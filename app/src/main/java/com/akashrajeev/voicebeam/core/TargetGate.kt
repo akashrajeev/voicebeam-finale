@@ -15,6 +15,7 @@ data class GateInputs(
     val audioOnly: Boolean = false, // use speaker embedding only; no camera fallback
     val wearerMatch: Float? = null, // fresh score of deliberately enrolled wearer, optional
     val wearerVetoEnabled: Boolean = false,
+    val visionAgeMs: Long = -1, // source-frame age; -1 when absent
     val voiceLearned: Boolean = true, // complete frozen enrollment, supplied by engine
 
 )
@@ -49,6 +50,7 @@ class TargetGate(
         state = when {
             !i.hasLock -> TargetState.UNLOCKED
             !i.voiceLearned -> TargetState.UNCERTAIN
+            !i.audioOnly && !i.lockedVisible -> TargetState.UNCERTAIN
             !i.audioOnly && i.lockedVisible && i.othersSpeaking > 0.55f && i.lockedSpeaking < 0.3f -> TargetState.OTHER
             !i.voiceActive -> TargetState.UNCERTAIN
             wearerVeto(i) -> TargetState.OTHER
@@ -92,8 +94,9 @@ class TargetGate(
             // A short gap may hold the last target turn. It must expire, not retain .95 forever.
             if (holdLeft <= 0f) probability = 0f
         }
-        val confirmed = !i.hasLock ||
-            (i.voiceLearned && i.voiceActive && state == TargetState.TARGET) || (i.voiceLearned && !i.voiceActive && holdLeft > 0f)
+        val confirmed = !i.hasLock || ((i.audioOnly || i.lockedVisible) &&
+            ((i.voiceLearned && i.voiceActive && state == TargetState.TARGET) ||
+                (i.voiceLearned && !i.voiceActive && holdLeft > 0f)))
         boostAllowed = confirmed
         val strength = quietOthers.coerceIn(0f, 1f)
         // Squared residual gives useful suppression despite proximity to the phone mic.

@@ -33,6 +33,11 @@ class FaceAnalyzer(
     @Volatile private var lastW = 0
     @Volatile private var lastH = 0
     @Volatile private var busy = false
+    private var submittedMs = 0L
+    private var sensorNs = 0L
+    private var diagnosticAtMs = SystemClock.uptimeMillis()
+    private var processedFrames = 0
+    private var droppedFrames = 0
 
     init {
         landmarker = create(context, Delegate.GPU) ?: create(context, Delegate.CPU)
@@ -63,14 +68,16 @@ class FaceAnalyzer(
 
     override fun analyze(image: ImageProxy) {
         val lm = landmarker
-        if (lm == null || busy) { image.close(); return }
+        if (lm == null || busy) { droppedFrames++; image.close(); return }
         try {
             val bmp = frameBitmapFor(image)
             val rot = image.imageInfo.rotationDegrees
             val upright = if (rot != 0) rotateInto(bmp, rot) else bmp
             lastW = upright.width; lastH = upright.height
             busy = true
-            lm.detectAsync(BitmapImageBuilder(upright).build(), SystemClock.uptimeMillis())
+            submittedMs = SystemClock.uptimeMillis()
+            sensorNs = image.imageInfo.timestamp
+            lm.detectAsync(BitmapImageBuilder(upright).build(), submittedMs)
         } catch (t: Throwable) {
             busy = false
             Log.w("VoiceBeamVision", "analyze failed", t)
@@ -118,18 +125,37 @@ class FaceAnalyzer(
     }
 
     private fun handle(r: FaceLandmarkerResult) {
-        busy = false
-        val faces = r.faceLandmarks().map { pts ->
-            var minX = 1f; var minY = 1f; var maxX = 0f; var maxY = 0f
-            for (p in pts) {
-                minX = minOf(minX, p.x()); minY = minOf(minY, p.y())
-                maxX = maxOf(maxX, p.x()); maxY = maxOf(maxY, p.y())
+        try {
+            com.akashrajeev.voicebeam.core.withCallbackCleanup(cleanup = { busy = false }) {
+                val receivedMs = SystemClock.uptimeMillis()
+                val sourceMs = r.timestampMs()
+                processedFrames++
+                val faces = r.faceLandmarks().map { pts ->
+                    var minX = 1f; var minY = 1f; var maxX = 0f; var maxY = 0f
+                    for (p in pts) {
+                        minX = minOf(minX, p.x()); minY = minOf(minY, p.y())
+                        maxX = maxOf(maxX, p.x()); maxY = maxOf(maxY, p.y())
+                    }
+                    val faceH = hypot(pts[10].x() - pts[152].x(), pts[10].y() - pts[152].y()).coerceAtLeast(1e-4f)
+                    val lipGap = hypot(pts[13].x() - pts[14].x(), pts[13].y() - pts[14].y())
+                    FaceObservation(Box(minX, minY, maxX, maxY), lipGap / faceH)
+                }
+                // Preserve the MediaPipe input timestamp; old frames must not look fresh.
+                onFaces(sourceMs, faces, lastW, lastH)
+                if (receivedMs - diagnosticAtMs >= 1000L) {
+                    val elapsed = (receivedMs - diagnosticAtMs).coerceAtLeast(1)
+                    com.akashrajeev.voicebeam.engine.Diagnostics.event("vision sourceMs=" + sourceMs +
+                        " sensorNs=" + sensorNs + " receivedMs=" + receivedMs +
+                        " inferenceMs=" + (receivedMs - submittedMs) +
+                        " processedFps=" + (processedFrames * 1000f / elapsed) +
+                        " droppedFrames=" + droppedFrames + " faces=" + faces.size +
+                        " mouthOpenness=" + faces.joinToString(",") { it.mouthOpenness.toString() })
+                    diagnosticAtMs = receivedMs; processedFrames = 0; droppedFrames = 0
+                }
             }
-            val faceH = hypot(pts[10].x() - pts[152].x(), pts[10].y() - pts[152].y()).coerceAtLeast(1e-4f)
-            val lipGap = hypot(pts[13].x() - pts[14].x(), pts[13].y() - pts[14].y())
-            FaceObservation(Box(minX, minY, maxX, maxY), lipGap / faceH)
+        } catch (t: Throwable) {
+            Log.w("VoiceBeamVision", "callback failed: " + t.javaClass.simpleName)
         }
-        onFaces(SystemClock.uptimeMillis(), faces, lastW, lastH)
     }
 
     val available: Boolean get() = landmarker != null

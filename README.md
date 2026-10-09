@@ -40,4 +40,4 @@ Requires JDK 17, Android SDK 35 and a connected Android phone (API 26 or newer).
 
 ## Validation
 
-The ENH-7 fix candidate on its review branch passed 75 JVM tests and built a debug APK. See the [build result](https://github.com/akashrajeev/voicebeam-finale/actions/runs/37952769964) and [candidate release](https://github.com/akashrajeev/voicebeam-finale/releases/tag/enh7-fix-1-66b5d0b). That candidate is separate from the main source until its PR is merged. Live-room hearing, camera/audio timing, Bluetooth routing and sustained device performance are evaluated on the test phone; unit tests do not establish those results.
+The rolling-query source revision passed 88 JVM tests and built a debug APK in the [recorded validation run](https://github.com/akashrajeev/voicebeam-finale/actions/runs/37963570037). Main also carries a face-loss safety change, which needs validation for its exact revision. Live-room hearing, camera/audio timing, Bluetooth routing and sustained device performance are evaluated on the test phone; unit tests do not establish those results.
