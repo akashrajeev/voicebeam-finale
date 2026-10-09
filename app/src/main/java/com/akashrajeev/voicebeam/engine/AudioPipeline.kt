@@ -66,7 +66,11 @@ class AudioPipeline(
     val voiceQueue = DropOldestQueue<Pair<FloatArray, Float>>(VOICE_BACKLOG_BLOCKS)
 
     private val gate = TargetGate(frameMs = (models.denoiser.frameShift.takeIf { it > 0 } ?: 256) * 1000f / SAMPLE_RATE)
-    private val cleanVad = com.akashrajeev.voicebeam.ml.NeuralVad(app.assets)
+    private val cleanVad = com.akashrajeev.voicebeam.core.OptionalDiagnostic(
+        factory = { com.akashrajeev.voicebeam.ml.NeuralVad(app.assets) },
+        release = { it.release() },
+        onFailure = { Diagnostics.event("cleanVad_disabled error=" + it.javaClass.simpleName) },
+    )
     private val vad = com.akashrajeev.voicebeam.ml.NeuralVad(app.assets)
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
@@ -76,7 +80,7 @@ class AudioPipeline(
     fun start(useSceneMic: Boolean) {
         if (running.getAndSet(true)) return
         Diagnostics.event("audio_start sceneMic=" + useSceneMic)
-        capturedSamples = 0L; asrQueue.clear(); voiceQueue.clear(); vad.reset(); cleanVad.reset()
+        capturedSamples = 0L; asrQueue.clear(); voiceQueue.clear(); vad.reset(); cleanVad.sample { it.reset() }
         thread = Thread({
             try { loop(useSceneMic) }
             catch (t: Throwable) {
@@ -86,7 +90,7 @@ class AudioPipeline(
             } finally {
                 running.set(false)
                 try { vad.release() } catch (_: Throwable) {}
-                try { cleanVad.release() } catch (_: Throwable) {}
+                cleanVad.close()
             }
         }, "vb-audio").also { it.start() }
     }
@@ -221,12 +225,19 @@ class AudioPipeline(
                 val vadStart = SystemClock.elapsedRealtimeNanos()
                 // Identity/detection sees the same raw mic as enrollment, not hearing denoise.
                 val voice = vad.isVoice(input)
-                cleanVad.isVoice(clean.let { if (it.size == n) it else it.copyOf(n) })
+                val cleanVadStart = SystemClock.elapsedRealtimeNanos()
+                val cleanVadProbability = cleanVad.sample {
+                    it.isVoice(clean.let { if (it.size == n) it else it.copyOf(n) })
+                    it.probability
+                }
+                val cleanVadUs = (SystemClock.elapsedRealtimeNanos() - cleanVadStart) / 1000
                 val rawRms = rmsForCaption(input)
                 val gateStart = SystemClock.elapsedRealtimeNanos()
                 val s = signals()
                 gate.quietOthers = quietOthers
-                val g = gate.process(s.copy(voiceActive = voice))
+                val observation = com.akashrajeev.voicebeam.core.SpeechObservation.observe(
+                    enrollmentActive(), voice, rawRms, s)
+                val g = gate.process(observation.inputs)
                 val requestedBoost = if (gate.boostAllowed) TargetGate.dbToLinear(boostDb) else 1f
                 val boost = FrameDsp.safeBoost(clean, n, g, requestedBoost) // diagnostic estimate; envelope limits actual output
                 val e = envelope.process(clean, n, g, requestedBoost, gated, out)
@@ -273,7 +284,9 @@ class AudioPipeline(
                         " voiceMatch=" + s.voiceMatch + " wearerMatch=" + s.wearerMatch + " wearerVeto=" + s.wearerVetoEnabled + " boostAllowed=" + gate.boostAllowed +
                         " appliedBoost=" + boost +
                         " gate=" + gate.state + " gain=" + g + " probability=" + gate.probability +
-                        " vad=" + voice + " rawVadProb=" + vad.probability + " cleanVadProb=" + cleanVad.probability +
+                        " vad=" + voice + " rawVadProb=" + vad.probability + " cleanVadProb=" + cleanVadProbability + " cleanVadUs=" + cleanVadUs +
+                        " queryFallback=" + (!voice && observation.queryWeight != null) +
+                        " playbackUnderruns=" + track?.underrunCount +
                         " denoiseMix=" + denoiseMix + " visionAgeMs=" + s.visionAgeMs +
                         " voiceQueue=" + voiceQueue.size + " droppedVoiceBlocks=" + voiceQueue.dropped +
                         " audioProcessUptimeMs=" + SystemClock.uptimeMillis() + " written=" + written +
@@ -288,12 +301,8 @@ class AudioPipeline(
                     gate.probability, voice))
                 // Recognition needs speech, not the gate's sometimes 80%-attenuated output.
                 // Assign a caption to the target separately using the gate probability.
-                if (enrollmentActive()) {
-                    voiceQueue.offer(Pair(input.copyOf(), 1f))
-                } else if (com.akashrajeev.voicebeam.core.SpeechObservation.queryEligible(false, voice, rawRms, s)) {
-                    // Copy: the consumer is on another thread and `clean` is reused next frame.
-                    voiceQueue.offer(Pair(input.copyOf(), if (s.hasLock && s.othersSpeaking < 0.3f) s.lockedSpeaking else 0f))
-                }
+                com.akashrajeev.voicebeam.core.SpeechObservation.enqueue(
+                    observation, input, voiceQueue)
                 onFrame(FrameInfo(sqrt(e / n), g, gate.probability, voice,
                     routed?.productName?.toString().takeIf { headphoneRoute }))
                 if (com.akashrajeev.voicebeam.BuildConfig.DEBUG && ++dbgFrames % 400 == 0L) {
