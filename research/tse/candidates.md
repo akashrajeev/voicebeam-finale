@@ -4,6 +4,15 @@ Status: none has been shown running on an Android phone in this project.
 Verify license, weights, size and causal mode before any port. Screen on host
 first per `README.md`; only pass/fail summaries are committed.
 
+Stack note (verified 2026-10-10 against the bundled sherpa-onnx 1.13.8 AAR):
+sherpa exposes denoisers (GTCRN, DPDFNet), VAD, speaker embeddings and
+diarization, but **no target-speaker extraction API**, and its "source
+separation" models (Spleeter/UVR) split music vocals from accompaniment, not
+one voice from another. So a real extractor needs its own ONNX Runtime path and
+weights. Drop-in point is ready: `AudioPipeline.tseStage.extractor`, cued with
+the frozen enrollment centroid + locked-face lip activity, toggled by
+`Settings.tseExperiment` (empty `models/tse/` bundle = passthrough).
+
 | Candidate | Cue | Why | Watch-outs |
 |---|---|---|---|
 | VoiceFilter-Lite (Google, streaming, ~2.2 MB int8) | enrollment embedding | Only phone-proven design in this list; asymmetric loss + adaptive suppression; built for ASR features, not listening audio | needs waveform-output variant or feature-domain rework for earphone feed |

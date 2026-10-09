@@ -74,6 +74,9 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SwitchRow("1080p video", "Bigger files; 720p is plenty for most phones", s.hd1080) { v -> engine.updateSettings { it.copy(hd1080 = v) } }
             SectionHeader("Stage captions (PC)")
             SwitchRow("Share captions on local Wi-Fi", state.stageUrl?.let { "Open $it on a laptop" } ?: "Shows big captions in a laptop browser", s.stageEnabled) { v -> engine.updateSettings { it.copy(stageEnabled = v) } }
+            SectionHeader("Voice extraction (experimental)")
+            Text("enh-exp only. Affects overlapping speech; alternating turns are unchanged. No extraction model is bundled in this build, so the switch arms the pipeline but audio stays on ENH-7 passthrough.", color = Muted, fontSize = 12.sp)
+            SwitchRow("Try voice extraction", if (engine.tseBundlePresent) "Model bundle found" else "No model bundled — passthrough", s.tseExperiment) { v -> engine.updateSettings { it.copy(tseExperiment = v) } }
             if (BuildConfig.DEBUG) {
                 SectionHeader("Testing")
                 SwitchRow("Demo feed (testing)", "Plays a recorded two-person clip instead of the camera and mic", s.debugFeed) { v -> engine.updateSettings { it.copy(debugFeed = v) } }

@@ -112,6 +112,15 @@ class VoiceBeamEngine(private val app: Context) {
 
     // ---------- models ----------
 
+    /** True when a downloadable extraction bundle was packaged under models/tse. None is bundled yet. */
+    val tseBundlePresent: Boolean by lazy {
+        try {
+            (app.assets.list("models/tse")?.size ?: 0) > 0
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     fun loadModels() {
         if (models != null || _state.value.modelError != null) return
         if (!loadingModels.compareAndSet(false, true)) return
@@ -268,6 +277,11 @@ class VoiceBeamEngine(private val app: Context) {
         // fingerprint + locked-face lip activity. Copied so audio-thread use is safe.
         p.embeddingProvider = { try { learner?.centroid?.copyOf() } catch (_: Throwable) { null } }
         p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
+        // enh-exp: extraction stage toggle. The only bundled extractor is the
+        // passthrough, so enabling without a model bundle changes nothing audible.
+        p.tseStage.enabled = s.tseExperiment
+        Diagnostics.event("tse experiment=" + s.tseExperiment + " modelPresent=" + tseBundlePresent +
+            " extractor=" + p.tseStage.extractor.name)
         pipeline = p
         pipelineDebugFeed = wantDebug
         if (wantDebug) {
@@ -415,7 +429,7 @@ class VoiceBeamEngine(private val app: Context) {
         val s = f(old)
         _settings.value = s
         settingsStore.save(s)
-        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise }
+        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise; it.tseStage.enabled = s.tseExperiment }
         if (s.stageEnabled != old.stageEnabled) applyStage(s.stageEnabled)
         if (s.useSceneMic != old.useSceneMic && pipeline != null) { stopListening(); startListening() }
         // Demo feed toggles swap the audio source too (recorded wav vs mic).
