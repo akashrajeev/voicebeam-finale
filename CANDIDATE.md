@@ -77,3 +77,21 @@ unchanged. Android compilation/Settings pixels still pending CI/device. No main
 merge. Test original recording before declaring a hearing improvement.
 
 Proxy bake-off reported by research: TitaNet gap0.669 raw vs0.485 GTCRN and0.578 DPDFNet-2. Therefore RAW stays default; denoising is not assumed better. Synthetic proxy, not this room. Enroll/test RAW first, then toggle denoised, restart/relearn and repeat.
+
+
+# experiment-4: CAM++ zh_en COMMON ADVANCED, untuned A/B candidate
+
+Base experiment-3 e8e30ce. Same strict settings and RAW matcher default. Asset
+3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx via sherpa-onnx,
+packaged as models/campplus_advanced.onnx. Not English VoxCeleb or WeSpeaker LM.
+Proxy raw-cosine min target.864/max other.202/gap.662 vs TitaNet.845/.177/.669:
+CAM++ ties, NOT a winner. These are synthetic proxy results relayed from research,
+not measured on the user's room. Native compatibility/phone hearing still need CI/device.
+
+Initial conservative remap low.35/high.75; runtime score threshold default.8 means
+raw cosine.67. This is deliberately NOT TitaNet's cosine.53 threshold. It lies between
+proxy max-other.202 and min-target.864, but is UNTUNED, not validated operating point.
+Target high-lips fallback still exists, so this threshold alone doesn't control all
+TARGET decisions. Real-room target-only/other-only false accept/reject data needed.
+Install, learn SAME target cleanly, fixed volume/protocol, compare to experiment-3 RAW.
+Do not compare app score numbers across profiles as identical probabilities.
