@@ -58,6 +58,8 @@ import java.util.Locale
 fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     val context = LocalContext.current
     val list by engine.sessionList.collectAsState()
+    val live by engine.state.collectAsState()
+    var offlineBusy by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<SessionMeta?>(null) }
     var deleting by remember { mutableStateOf<SessionMeta?>(null) }
@@ -83,6 +85,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.weight(1f).statusBarsPadding().padding(horizontal = 18.dp)) {
             Text("Sessions", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
+            OfflineVideoPanel(allowed = !live.listening && !live.recording.active && !live.recording.exporting, onBusy = { offlineBusy = it }, onImported = { engine.refreshSessions() })
             if (list.isEmpty()) {
                 Text("No recordings yet. On the Focus screen, lock onto a face and press the red button.", color = Muted)
             }
@@ -108,6 +111,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                         }
                         if (expanded == m.id) {
                             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (File(m.dir, "original.mp4").exists()) Chip("Original", color = Card2) { openFile(context, File(m.dir, "original.mp4"), "video/mp4") }
                                 if (m.video.exists()) Chip("▶ Play video", color = Card2) { openFile(context, m.video, "video/mp4") }
                                 if (m.cleanAudio.exists()) Chip(if (playing == m.id + "c") "■ Stop" else "▶ Clean", color = Card2) { play(m.cleanAudio, m.id + "c") }
                                 if (m.rawWav.exists()) Chip(if (playing == m.id + "r") "■ Stop" else "▶ Raw", color = Card2) { play(m.rawWav, m.id + "r") }
@@ -123,7 +127,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                 }
             }
         }
-        BottomNav(Screen.SESSIONS, onNavigate)
+        if (!offlineBusy) BottomNav(Screen.SESSIONS, onNavigate)
     }
 
     renaming?.let { m ->
@@ -147,7 +151,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     }
 }
 
-private fun modeLabel(m: SessionMeta): String = when (m.mode) {
+private fun modeLabel(m: SessionMeta): String = if (File(m.dir, "offline-reference.txt").exists()) "Offline SpeakerBeam · original retained" else when (m.mode) {
     SaveMode.AUDIO -> "Audio + .srt"
     SaveMode.AUDIO_VIDEO -> "A+V · " + when (m.captions) { "burned" -> "Captions burned in"; "none" -> "No captions"; else -> ".srt file" }
     SaveMode.CAPTIONS -> "Captions only"
