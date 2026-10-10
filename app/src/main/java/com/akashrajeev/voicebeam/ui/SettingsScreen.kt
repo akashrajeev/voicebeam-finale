@@ -52,9 +52,9 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.weight(1f).statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             Text("Settings", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
-            Text("ENH-7: enhanced listening and speaker-turn focus", color = Muted, fontSize = 12.sp)
+            Text("Conversation A/B candidate - 2s voice queries", color = Muted, fontSize = 12.sp)
             Text(engine.enrollmentMessage(), color = Muted, fontSize = 12.sp)
-            Text("Strict focus turns down learned but unconfirmed speech after hangover. It can mute the target too; overlap is not separated.", color = Muted, fontSize = 12.sp)
+            Text("Fresh strong voice can open after one query. Only strong non-target evidence closes it. Unknown/stale/overlap pass without boost; not separation.", color = Muted, fontSize = 12.sp)
             SectionHeader("Listening")
             SliderRow("Noise removal", when { s.denoise < 0.05f -> "Off"; s.denoise < 0.6f -> "Light"; else -> "Strong" }, s.denoise, 0f..1f) { v -> engine.updateSettings { it.copy(denoise = v) } }
             SliderRow("Quiet others (default)", "${(s.quietOthers * 100).roundToInt()}%", s.quietOthers, 0f..1f) { v -> engine.updateSettings { it.copy(quietOthers = v) } }
@@ -64,7 +64,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SwitchRow("Strict learned focus", "Turn down unconfirmed audio after learning; may hide target on misses", s.strictFocus) { v -> engine.updateSettings { it.copy(strictFocus = v) } }
             Text("Strict mode", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
             Segmented(listOf("Speech-only", "Full"), if (s.strictFull) 1 else 0) { i -> engine.updateSettings { it.copy(strictFull = i == 1) } }
-            Text("Full also ducks music and quiet audio; overlap may duck the target too.", color = Color.Gray, fontSize = 12.sp)
+            Text("This candidate keeps ambiguous, stale and overlapping speech open without boost, even in Full.", color = Color.Gray, fontSize = 12.sp)
             SliderRow("Unconfirmed residual gain", "${(s.strictResidual * 100).roundToInt()}% amplitude", s.strictResidual, .02f..1f) { v -> engine.updateSettings { it.copy(strictResidual = v) } }
             SliderRow("Target hangover", "${s.strictHangoverMs.roundToInt()} ms", s.strictHangoverMs, 0f..2000f) { v -> engine.updateSettings { it.copy(strictHangoverMs = v) } }
             SliderRow("Voice target threshold", "${(s.targetMatchThreshold * 100).roundToInt()} score", s.targetMatchThreshold, .2f.. .99f) { v -> engine.updateSettings { it.copy(targetMatchThreshold = v) } }
