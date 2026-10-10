@@ -1,8 +1,8 @@
-name: ENH-6-tested-apk
+name: ENH-6-consent-apk
 # ENH-6: safe enhancement and enrollment. Bluetooth unchanged.
 on:
   push:
-    branches: [experiment/enh-6-observation-2026-10-08]
+    branches: [consent-2026-10-10]
     paths: ['.github/workflows/apk.yml']
 permissions:
   contents: read
@@ -29,7 +29,7 @@ jobs:
           grep -ho 'tests="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml
       - uses: actions/upload-artifact@v4
         with:
-          name: VoiceBeam-ENH-6-app-and-startup-test
+          name: VoiceBeam-ENH-6-consent
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/androidTest/debug/*.apk
