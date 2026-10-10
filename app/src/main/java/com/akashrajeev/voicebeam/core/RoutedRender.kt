@@ -21,7 +21,7 @@ object RoutedRender {
      * TARGET_ONLY / NONE: lightly denoised audio if provided, else the original, gain 1.
      * OTHER_ONLY: original ducked by focusDb (0 = no duck, floor -30).
      * OVERLAP: [extracted] (target-isolated) when provided; without it the original passes through untouched (never fabricated).
-     * Source weights and gain are crossfaded linearly over xfadeSec so segment edges do not click.
+     * Source weights and gain are crossfaded (centered moving average) so the full transition at each edge is about xfadeSec wide.
      * All inputs must be the same length and sample rate. Output length == input length.
      */
     fun render(
@@ -48,7 +48,7 @@ object RoutedRender {
                 FootageAnalysis.Seg.OVERLAP -> { if (extracted != null) wE[i] = 1f else wO[i] = 1f; g[i] = 1f }
             }
         }
-        val k = (xfadeSec * sampleRate).toInt()
+        val k = (xfadeSec * sampleRate / 2f).toInt() // centered window 2k+1 ~= xfadeSec total transition width
         val sO = smooth(wO, k); val sD = smooth(wD, k); val sE = smooth(wE, k); val sG = smooth(g, k)
         val out = FloatArray(n)
         for (i in 0 until n) {
@@ -73,7 +73,7 @@ object RoutedRender {
      * and caps every frame so output RMS never exceeds the source RMS.
      * [voiced] is one flag per [frame] samples of the SOURCE (Silero-style). A frame counts as voiced if any frame within +/- ctxFrames is voiced.
      * Gain ramps linearly from the previous frame's gain, so there are no step discontinuities.
-     * floor = 0 reproduces the old hard mute (explicitly allowed, not default).
+     * floor = 0 mutes non-voiced frames but still ramps over the first non-voiced frame (about 32 ms at 16 kHz), unlike the old immediate hard mute. Deliberate: avoids a click.
      */
     fun protect(
         extracted: FloatArray, source: FloatArray, voiced: BooleanArray,
