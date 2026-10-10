@@ -12,9 +12,12 @@ object FinalAudioGuardMath {
     const val MIN_SELECTED = 0.5f
     const val MIN_SPEECH = 0.5f
     // Recalibrated on a 10-case LAPTOP distribution with the TitaNet-small port (data-thin; revisit with device renders).
-    // Honest outputs 0.371..0.767 (incl. dashcam 0.471); true fails 0.293 / 0.137. Rule 2 arms at source cos >= 0.6 and fires on gap s-o > 0.45
-    // (venue 0.529 fires; honest gaps 0.236..0.373 clear). Was 0.4 / 0.6 / 0.15. Reference is NOT bandlimited (that was tested and disqualified).
-    const val OUTPUT_MIN_COSINE = 0.35f
+    // Output cosine: true fails max 0.293 (venue 0.137, others 0.269/0.277/0.293); honest min 0.352; 0.32 sits between with margins +0.032 / -0.027.
+    // Rule 2 arms at source cos >= 0.6 and fires on gap s-o > 0.45 (venue 0.529 fires; honest gaps 0.236..0.373 clear). Was 0.4 / 0.6 / 0.15.
+    // Reference is NOT bandlimited (tested and disqualified).
+    // KNOWN LIMITATION: on very noisy references the guard cannot separate a good fallback (clip2 o=0.277) from a bad render (o=0.269)
+    // and ships the original. Safe default. Future fix: denoise the reference before guard embedding.
+    const val OUTPUT_MIN_COSINE = 0.32f
     const val HOMOGENEOUS_SOURCE_COSINE = 0.6f
     const val MAX_HOMOGENEOUS_LOSS = 0.45f
 
