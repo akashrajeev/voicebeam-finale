@@ -48,7 +48,7 @@ class FootageRenderPipelineTest {
         val x = FloatArray(n) { tone(400.0, 0.2f, it) }
         val voiced = BooleanArray((n + 511) / 512) { false }
         val hm = RoutedRender.noneFrames(labels, n, sr)
-        val out = RoutedRender.protect(x, x, voiced, floor = 0.1f, hardMute = hm)
+        val out = RoutedRender.protect(x, x, voiced, floor = 0.04f, hardMute = hm)
         assertTrue(RoutedRender.rms(out, 3 * sr + 4000, 4 * sr - 100) < 1e-3f)     // NONE: hard mute
         assertTrue(RoutedRender.rms(out, 4000, sr - 100) > 0.005f)                    // TARGET_ONLY dip: audible soft floor
     }
