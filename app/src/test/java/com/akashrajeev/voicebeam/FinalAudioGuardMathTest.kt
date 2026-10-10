@@ -67,4 +67,21 @@ class FinalAudioGuardMathTest {
         assertFalse(FinalAudioGuardMath.passChunks(fa(0.5f), fa(0.5f, 0.5f)))
         assertFalse(FinalAudioGuardMath.passChunks(fa(), fa()))
     }
+
+    @Test fun targetRegionFloor() {
+        // eval separation basis: honest target chunks .65-.82, wrongly ducked region .14-.20
+        assertFalse(FinalAudioGuardMath.tooManyWeakTargetChunks(floatArrayOf(0.65f, 0.7f, 0.82f, 0.75f)))
+        assertTrue(FinalAudioGuardMath.tooManyWeakTargetChunks(floatArrayOf(0.7f, 0.18f, 0.8f, 0.75f)))     // 1/4 = 25% > 10%
+        assertFalse(FinalAudioGuardMath.tooManyWeakTargetChunks(FloatArray(10) { if (it == 0) 0.2f else 0.7f })) // exactly 10% allowed
+        assertTrue(FinalAudioGuardMath.tooManyWeakTargetChunks(FloatArray(10) { if (it < 2) 0.2f else 0.7f }))  // 20%
+        assertFalse(FinalAudioGuardMath.tooManyWeakTargetChunks(floatArrayOf()))                              // no target chunks: no opinion
+        assertFalse(FinalAudioGuardMath.tooManyWeakTargetChunks(floatArrayOf(0.25f, 0.25f)))                  // at the floor is not below
+        assertTrue(FinalAudioGuardMath.tooManyWeakTargetChunks(floatArrayOf(Float.NaN, 0.7f)))
+    }
+    @Test fun targetChunkQualification() {
+        val l = six(Seg.TARGET_ONLY, Seg.TARGET_ONLY, Seg.TARGET_ONLY, Seg.OVERLAP, Seg.OVERLAP, Seg.OTHER_ONLY)
+        assertTrue(FinalAudioGuardMath.targetChunkQualifies(l, speechAll, 0, 48000))        // 50% TARGET_ONLY
+        val m = six(Seg.TARGET_ONLY, Seg.TARGET_ONLY, Seg.OVERLAP, Seg.OVERLAP, Seg.OVERLAP, Seg.OTHER_ONLY)
+        assertFalse(FinalAudioGuardMath.targetChunkQualifies(m, speechAll, 0, 48000))       // overlap does not count as target region
+    }
 }
