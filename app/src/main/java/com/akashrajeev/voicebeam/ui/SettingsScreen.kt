@@ -68,7 +68,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SliderRow("Unconfirmed residual gain", "${(s.strictResidual * 100).roundToInt()}% amplitude", s.strictResidual, .02f..1f) { v -> engine.updateSettings { it.copy(strictResidual = v) } }
             SliderRow("Target hangover", "${s.strictHangoverMs.roundToInt()} ms", s.strictHangoverMs, 0f..2000f) { v -> engine.updateSettings { it.copy(strictHangoverMs = v) } }
             SliderRow("Voice target threshold", "${(s.targetMatchThreshold * 100).roundToInt()} score", s.targetMatchThreshold, .2f.. .99f) { v -> engine.updateSettings { it.copy(targetMatchThreshold = v) } }
-            SwitchRow("Denoised speaker matcher", "Changing this stops listening and clears both templates. Start listening and learn again.", s.matcherDenoised) { v -> engine.updateSettings { it.copy(matcherDenoised = v) } }
+            SwitchRow("Denoised speaker matcher", "Changing stops listening. Existing profile stays; explicitly learn again on the selected feed before comparing.", s.matcherDenoised) { v -> engine.updateSettings { it.copy(matcherDenoised = v) } }
             SectionHeader("Captions")
             ValueRow("Language", "English")
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
