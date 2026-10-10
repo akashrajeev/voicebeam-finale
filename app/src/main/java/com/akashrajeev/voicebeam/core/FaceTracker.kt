@@ -68,6 +68,23 @@ class FaceTracker(
         return lockedId
     }
 
+    /** Which visible face a tap hits, without locking it. */
+    @Synchronized
+    fun faceAt(nx: Float, ny: Float, nowMs: Long): Int? {
+        val visible = tracks.filter { nowMs - it.lastSeen < 800 }
+        val hit = visible.firstOrNull { it.box.contains(nx, ny, pad = 0.04f) }
+            ?: visible.minByOrNull { hypot(it.box.cx - nx, it.box.cy - ny) }
+                ?.takeIf { hypot(it.box.cx - nx, it.box.cy - ny) < 0.25f }
+        return hit?.id
+    }
+
+    @Synchronized
+    fun lockFace(id: Int): Boolean {
+        if (tracks.none { it.id == id }) return false
+        lockedId = id
+        return true
+    }
+
     @Synchronized
     fun unlock() { lockedId = null }
 

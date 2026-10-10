@@ -259,6 +259,22 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     Text(engine.enrollmentMessage(), color = Color.White, fontSize = 12.sp)
                 }
                 StatusLine(state.lockedId != null, state.lockedSpeaking, state.voiceLearned, state.voiceMatch) { engine.unlock() }
+                if (state.consentMessage.isNotEmpty() || state.lockedId != null) {
+                    Text(
+                        when {
+                            state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING -> "Asking permission: " + state.consentMessage
+                            state.lockedId != null -> "Consent given. " + state.consentMessage + " (mouth movement match, not identity proof)"
+                            else -> state.consentMessage
+                        },
+                        color = Color.White, fontSize = 12.sp, modifier = Modifier.testTag("consent_status"),
+                    )
+                }
+                if (state.lockedId != null || state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING) {
+                    Button(onClick = { engine.withdrawConsent() }, modifier = Modifier.testTag("withdraw_consent")) { Text("Withdraw consent") }
+                }
+                if (state.consentRecords > 0) {
+                    androidx.compose.material3.TextButton(onClick = { engine.deleteConsentRecords() }) { Text("Delete consent records (${state.consentRecords})", fontSize = 12.sp) }
+                }
                 if (state.wearerEnrollmentActive) {
                     Text("Learning YOUR voice ${(state.wearerEnrollmentProgress * 100).roundToInt()}%: only you speak. Target learning paused.", color = Muted, fontSize = 12.sp)
                 }

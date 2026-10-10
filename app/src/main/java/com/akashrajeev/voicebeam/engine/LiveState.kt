@@ -1,5 +1,6 @@
 package com.akashrajeev.voicebeam.engine
 
+import com.akashrajeev.voicebeam.core.ConsentPhase
 import com.akashrajeev.voicebeam.core.CaptionSegment
 import com.akashrajeev.voicebeam.core.TrackedFace
 
@@ -44,4 +45,7 @@ data class LiveState(
     val earphones: String? = null,
     val recording: RecordingState = RecordingState(),
     val stageUrl: String? = null,
+    val consentPhase: ConsentPhase = ConsentPhase.IDLE,
+    val consentMessage: String = "",
+    val consentRecords: Int = 0,
 )

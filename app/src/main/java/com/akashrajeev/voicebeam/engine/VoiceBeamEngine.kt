@@ -18,6 +18,10 @@ import androidx.core.content.ContextCompat
 import com.akashrajeev.voicebeam.BuildConfig
 import com.akashrajeev.voicebeam.core.CaptionSegment
 import com.akashrajeev.voicebeam.core.Captions
+import com.akashrajeev.voicebeam.core.ConsentGate
+import com.akashrajeev.voicebeam.core.ConsentLog
+import com.akashrajeev.voicebeam.core.ConsentPhase
+import com.akashrajeev.voicebeam.core.ConsentResult
 import com.akashrajeev.voicebeam.core.FaceObservation
 import com.akashrajeev.voicebeam.core.FaceTracker
 import com.akashrajeev.voicebeam.core.GateInputs
@@ -62,6 +66,8 @@ class VoiceBeamEngine(private val app: Context) {
 
     @Volatile private var models: AudioModels? = null
     private val tracker = FaceTracker()
+    private val consent = ConsentGate()
+    private val consentLog by lazy { ConsentLog(File(app.filesDir, "consent/consent_log.jsonl")) }
     private var pipeline: AudioPipeline? = null
     private val lifecycle = ListenLifecycle()
     private val loadingModels = AtomicBoolean(false)
@@ -139,6 +145,11 @@ class VoiceBeamEngine(private val app: Context) {
         visionClockMs = timeMs
         val tracked = tracker.update(timeMs, faces)
         val locked = tracker.lockedId
+        val wasAsking = consent.phase == ConsentPhase.ASKING
+        consent.onFaces(timeMs, tracked.filter { timeMs - it.lastSeenMs < 400 }.associate { it.id to it.speaking })
+        if (wasAsking && consent.phase == ConsentPhase.DECLINED) consentLogAdd("expired", null, null, null)
+        if (locked == null && consent.phase == ConsentPhase.GRANTED) { consent.lockLost(); consentLogAdd("lock_lost", null, null, null) }
+        publishConsent()
         _state.update {
             it.copy(
                 faces = tracked, lockedId = locked, imageWidth = w, imageHeight = h,
@@ -149,15 +160,61 @@ class VoiceBeamEngine(private val app: Context) {
 
     fun setMirrored(m: Boolean) = _state.update { it.copy(mirrored = m) }
 
-    /** Tap in normalised image coordinates. Returns true when a face got locked. */
+    /**
+     * Tap in normalised image coordinates. With consent required this only ASKS
+     * the tapped person for permission; the lock happens after they say "I agree".
+     * Returns true when a face is being asked or got locked.
+     */
     fun lockAt(nx: Float, ny: Float): Boolean {
-        val prev = tracker.lockedId
-        val id = tracker.lockAt(nx, ny, SystemClock.uptimeMillis())
-        if (id != prev) { learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L }
-        _state.update { it.copy(lockedId = id, voiceLearned = learner?.learned == true,
-            voiceMatch = latestVoiceMatch, voiceEnrollmentActive = learner?.enrollmentEnabled == true,
-            voiceEnrollmentProgress = learner?.progress ?: 0f) }
-        return id != null
+        val id = tracker.faceAt(nx, ny, SystemClock.uptimeMillis()) ?: return false
+        if (tracker.lockedId != null) unlock()   // switching person: drop the old lock and its voice first
+        consent.request(id, SystemClock.uptimeMillis())
+        consentLogAdd("asked", id, null, null)
+        publishConsent()
+        return true
+    }
+
+    private fun lockWithConsent(id: Int) {
+        if (!tracker.lockFace(id)) return
+        learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
+        _state.update { it.copy(lockedId = id, voiceLearned = false, voiceMatch = null,
+            voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
+    }
+
+    /** Called with each finished caption sentence. */
+    private fun consentOnSpeech(text: String) {
+        val now = SystemClock.uptimeMillis()
+        when (val r = consent.onSpeech(now, text)) {
+            is ConsentResult.Granted -> { consentLogAdd("granted", r.faceId, r.lipActive, text); lockWithConsent(r.faceId) }
+            is ConsentResult.Refused -> consentLogAdd("refused", null, null, text)
+            is ConsentResult.NeedsRetry -> consentLogAdd("retry:" + r.reason.replace(' ', '_'), consent.faceId, null, text)
+            is ConsentResult.Withdrawn -> { consentLogAdd("withdrawn_spoken", null, null, text); revokeLock() }
+            ConsentResult.Ignored -> {}
+        }
+        publishConsent()
+    }
+
+    /** Always-available withdraw: unlocks and forgets the learned voice. */
+    fun withdrawConsent() {
+        consent.withdraw("button")
+        consentLogAdd("withdrawn_button", null, null, null)
+        revokeLock(); publishConsent()
+    }
+
+    private fun revokeLock() {
+        audioOnly = false; tracker.unlock(); learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
+        _state.update { it.copy(lockedId = null, voiceLearned = false, voiceMatch = null, voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
+    }
+
+    fun deleteConsentRecords() { consentLog.deleteAll(); publishConsent() }
+
+    private fun consentLogAdd(event: String, faceId: Int?, lip: Float?, heard: String?) {
+        try { consentLog.add(System.currentTimeMillis(), event, faceId, lip, heard) } catch (_: Throwable) {}
+    }
+
+    private fun publishConsent() {
+        val n = try { consentLog.count() } catch (_: Throwable) { 0 }
+        _state.update { it.copy(consentPhase = consent.phase, consentMessage = consent.lastMessage, consentRecords = n) }
     }
 
     fun enrollmentMessage(): String = "Target: " + (learner?.enrollmentMessage ?: "Models not loaded") + " | Wearer: " + (wearerLearner?.enrollmentMessage ?: "Models not loaded")
@@ -202,6 +259,9 @@ class VoiceBeamEngine(private val app: Context) {
     }
 
     fun unlock() {
+        if (consent.phase == ConsentPhase.GRANTED || consent.phase == ConsentPhase.ASKING) {
+            consent.withdraw("unlock"); consentLogAdd("withdrawn_unlock", null, null, null); publishConsent()
+        }
         audioOnly = false; tracker.unlock(); learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
         _state.update { it.copy(lockedId = null, voiceLearned = false, voiceMatch = null, voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
     }
@@ -341,6 +401,7 @@ class VoiceBeamEngine(private val app: Context) {
                         val seg = assembler.onBlock(block.size, text, ended, packet.probability, speechy)
                         fill = 0
                         publishCaption(seg)
+                        if (seg != null) consentOnSpeech(seg.text)
                         if (BuildConfig.DEBUG) {
                             if (seg != null) Log.i("VoiceBeamEngine", "caption seg: '" + seg.text + "' target=" + seg.isTarget)
                             if (seg != null) Log.i("VoiceBeamPerf", "caplat ms=" + (SystemClock.uptimeMillis() - capWallStart - seg.endMs))
@@ -428,6 +489,7 @@ class VoiceBeamEngine(private val app: Context) {
         audioOnly = false
         // Camera retargeting needs a fresh tap; do not silently attach to a new face.
         tracker.reset(); learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
+        consent.cancel()
         _state.update { it.copy(audioOnly = false, lockedId = null, voiceLearned = false, voiceMatch = null, voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
     }
 
