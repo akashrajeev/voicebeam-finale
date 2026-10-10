@@ -1,4 +1,5 @@
 name: Unified Recall and footage port validation
+# Guided video demo presentation candidate
 on:
   push:
     branches: [exp-13-recall-gemma]
