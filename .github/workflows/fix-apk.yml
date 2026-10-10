@@ -1,5 +1,5 @@
 name: recall-gemma-2026-10-10 validation and APK
-# One approved branch build on this workflow edit; subsequent source builds require approval.
+# Recall build iterations approved by owner; branch-only, artifacts only.
 on:
   push:
     branches: [recall-gemma-2026-10-10]
@@ -21,8 +21,23 @@ jobs:
           java-version: '17'
       - name: Fetch public models
         run: bash scripts/fetch_models.sh
-      - name: Unit tests and debug APK
-        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
+      - name: Unit tests and stable-signed Recall APK
+        env:
+          RECALL_SIGNING: ${{ secrets.VB_RECALL_SIGNING }}
+        run: |
+          test -n "$RECALL_SIGNING" || { echo 'Recall signing secret is required'; exit 1; }
+          export VB_RECALL_KEYSTORE="$RUNNER_TEMP/recall.p12"
+          python3 - <<'PY_SIGN'
+          import json,os,base64
+          cfg=json.loads(os.environ['RECALL_SIGNING'])
+          open(os.environ['VB_RECALL_KEYSTORE'],'wb').write(base64.b64decode(cfg['keystore']))
+          os.chmod(os.environ['VB_RECALL_KEYSTORE'],0o600)
+          with open(os.environ['RUNNER_TEMP']+'/recall-password','w') as f: f.write(cfg['password'])
+          PY_SIGN
+          export VB_RECALL_KEY_PASSWORD="$(cat "$RUNNER_TEMP/recall-password")"
+          trap 'rm -f "$VB_RECALL_KEYSTORE" "$RUNNER_TEMP/recall-password"' EXIT
+          ./gradlew --no-daemon testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
       - name: Desktop decode check of bundled Moonshine Base (informational)
         continue-on-error: true
         run: |

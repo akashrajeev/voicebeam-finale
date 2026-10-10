@@ -35,7 +35,11 @@ class RecallRepository(private val context: Context) {
                 inference.withLock {
                     models.close()
                     val specs=spec?.let { listOf(it) }?:listOf(RecallModelFiles.gemma,RecallModelFiles.embedding)
-                    specs.forEach { RecallModelFiles.install(context,it,uri) { message -> refresh(message,true) } }
+                    specs.forEach {
+                        if(uri==null && RecallModelFiles.file(context,it).length()==it.size) {
+                            refresh("Verifying ${it.name}",true);RecallModelFiles.verify(context,it)
+                        } else RecallModelFiles.install(context,it,uri) { message -> refresh(message,true) }
+                    }
                 }
                 refresh("Models installed. Ready for a phone test",false); process()
             } catch(t: Exception) { refresh(t.message?:"Model installation needs retry",false) }
@@ -54,12 +58,13 @@ class RecallRepository(private val context: Context) {
             refresh("Processing on this phone",true)
             var completed=false
             try {
-                inference.withLock {
-                    models.initialize()
-                    while(true) {
-                        val next=store.segments().firstOrNull { it.status=="queued" }?:break
+                inference.withLock { models.initialize() }
+                while(true) {
+                    val next=store.nextQueued()?:break
+                    inference.withLock {
+                        models.initialize()
                         try {
-                            val text=models.transcribe(next.path)
+                            val text=if(next.status=="transcribed") next.text else models.transcribe(next.path)
                             // Save ASR before any secondary operation. Never lose a successful transcript.
                             store.update(next.id,text=text,status="transcribed")
                             val ready=next.copy(text=text,status="transcribed")
@@ -83,7 +88,7 @@ class RecallRepository(private val context: Context) {
                 // Serialize clearing the worker with scheduling. A chunk may arrive after the final SELECT.
                 synchronized(this@RecallRepository) {
                     worker=null
-                    if(completed && store.segments().any { it.status=="queued" }) process()
+                    if(completed && store.nextQueued()!=null) process()
                 }
             }
         }
@@ -91,7 +96,7 @@ class RecallRepository(private val context: Context) {
     fun retry() {
         scope.launch {
             inference.withLock {
-                store.segments().filter { it.status in listOf("retry","needs_index") }.forEach { store.update(it.id,status="queued") }
+                store.retryFailed()
             }
             process()
         }
@@ -120,6 +125,14 @@ class RecallRepository(private val context: Context) {
             store.delete(session)
             synchronized(this@RecallRepository) { _state.value=_state.value.copy(answers=emptyList()) }
             refresh("Conversation deleted from this phone")
+        }
+    }
+    fun deleteDay(dayStart: Long, dayEnd: Long) = scope.launch {
+        if(state.value.recording) { refresh("Pause recording to manage saved conversations");return@launch }
+        inference.withLock {
+            store.sessions().filter { it.start>=dayStart && it.start<dayEnd }.forEach { store.delete(it.id) }
+            synchronized(this@RecallRepository) { _state.value=_state.value.copy(answers=emptyList()) }
+            refresh("Day deleted from this phone")
         }
     }
     fun releaseModels() = scope.launch { inference.withLock { models.close() } }

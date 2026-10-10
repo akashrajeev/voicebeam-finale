@@ -34,6 +34,13 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
         }
         add(RecallSegment(c.getLong(0),c.getLong(1),c.getLong(2),c.getLong(3),c.getString(4),c.getString(5),c.getString(6),c.getString(7),vector,c.getString(9)))
     } } }
+    fun nextQueued(): RecallSegment? {
+        val id=readableDatabase.rawQuery("SELECT id,session FROM segments WHERE status IN ('queued','transcribed') ORDER BY id LIMIT 1",null).use { c ->
+            if(c.moveToFirst()) c.getLong(0) to c.getLong(1) else null
+        } ?: return null
+        return segments(id.second).find { it.id==id.first }
+    }
+    fun retryFailed() = writableDatabase.execSQL("UPDATE segments SET status=CASE WHEN text='' THEN 'queued' ELSE 'transcribed' END WHERE status IN ('retry','needs_index')")
     fun update(id: Long, text: String? = null, status: String? = null, vector: FloatArray? = null, notes: String? = null, speaker: String? = null) {
         val v = ContentValues().apply {
             text?.let { put("text",it) }; status?.let { put("status",it) }; notes?.let { put("notes",it) }; speaker?.let { put("speaker",it) }

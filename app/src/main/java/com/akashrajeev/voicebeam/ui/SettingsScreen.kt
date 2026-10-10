@@ -70,6 +70,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             Text("Caption size", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
             Segmented(listOf("Small", "Medium", "Large"), s.captionSize) { i -> engine.updateSettings { it.copy(captionSize = i) } }
             SectionHeader("Saving")
+            Button(onClick = { onNavigate(Screen.SESSIONS) }) { Text("Saved Listen sessions") }
             Text("Default save mode", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
             Segmented(listOf("Audio", "Audio + video", "Captions"), s.saveMode.ordinal) { i -> engine.updateSettings { it.copy(saveMode = SaveMode.values()[i]) } }
             Text("Captions on video", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))

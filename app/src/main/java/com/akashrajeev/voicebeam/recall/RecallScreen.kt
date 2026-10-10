@@ -48,6 +48,16 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
 
     var consent by remember { mutableStateOf(false) }
     var deletion by remember { mutableStateOf(false) }
+    var deleteDay by remember { mutableStateOf(false) }
+    var dayOffset by rememberSaveable { mutableStateOf(0) }
+    val day=remember(dayOffset) { java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY,0);set(java.util.Calendar.MINUTE,0);set(java.util.Calendar.SECOND,0);set(java.util.Calendar.MILLISECOND,0)
+        add(java.util.Calendar.DAY_OF_YEAR,dayOffset)
+    } }
+    val dayStart=day.timeInMillis
+    val dayEnd=(day.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR,1) }.timeInMillis
+    val visibleSessions=state.sessions.filter { it.start>=dayStart && it.start<dayEnd }
+    val daySegments=state.segments.filter { clip -> visibleSessions.any { it.id==clip.session } }
     var modelSpec by remember { mutableStateOf(RecallModelFiles.gemma) }
     val player=remember { MediaPlayer() }
     var playbackError by remember { mutableStateOf("") }
@@ -80,6 +90,10 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
         text={Text("Remove the audio, transcript, notes and search data from this phone.")},
         confirmButton={TextButton(onClick={repo.delete(selected!!);deletion=false;selected=null;page="home"}) { Text("Delete") }},
         dismissButton={TextButton(onClick={deletion=false}) { Text("Keep") }})
+    if(deleteDay) AlertDialog(onDismissRequest={deleteDay=false},title={Text("Delete this day's conversations?")},
+        text={Text("Delete the selected day's audio, transcripts, notes and search data from this phone.")},
+        confirmButton={TextButton(onClick={repo.deleteDay(dayStart,dayEnd);deleteDay=false}) { Text("Delete day") }},
+        dismissButton={TextButton(onClick={deleteDay=false}) { Text("Keep") }})
     Column(Modifier.fillMaxSize().background(RecallBg).statusBarsPadding()) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(14.dp),contentPadding=PaddingValues(top=20.dp,bottom=24.dp)) {
             item {
@@ -109,9 +123,14 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                     TextButton(onClick={page="ask";selected=null}) { Text("✧ Ask your day") }
                     TextButton(onClick={page="manage"}) { Text("Manage") }
                 } }
+                item { Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick={dayOffset=0}) { Text("Today") }
+                    TextButton(onClick={dayOffset=-1}) { Text("Yesterday") }
+                    TextButton(onClick={page="all"}) { Text("All days") }
+                } }
                 item { Text("YOUR DAY",color=Sand,fontSize=13.sp,fontWeight=FontWeight.Bold) }
-                if(state.sessions.isEmpty()) item { RecallPanel { Text("Start a conversation to build your timeline.",color=Sand) } }
-                items(state.sessions,key={it.id}) { session ->
+                if(visibleSessions.isEmpty()) item { RecallPanel { Text("Start a conversation to build your timeline.",color=Sand) } }
+                items(visibleSessions,key={it.id}) { session ->
                     val clips=state.segments.filter { it.session==session.id }
                     RecallPanel(Modifier.clickable { selected=session.id;title=session.title;page="detail" }) {
                         Text(time(session.start),color=Mint,fontSize=12.sp)
@@ -122,6 +141,14 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                 }
                 item {
                     Text("Stored on this phone",color=Color(0xFF8AABA0),fontSize=12.sp)
+                    val recap=daySegments.flatMap { clip ->
+                        val notes=runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray())
+                        (0 until notes.length()).map { notes.getJSONObject(it).optString("quote") }
+                    }.filter { it.isNotBlank() }.distinct().take(6)
+                    if(recap.isNotEmpty()) RecallPanel {
+                        Text("DAILY RECAP · SOURCE EXTRACTS",color=Mint,fontSize=12.sp)
+                        recap.forEach { Text(it,color=Sand) }
+                    }
                     if(state.segments.any { it.status in listOf("retry","needs_index") }) TextButton(onClick={repo.retry()}) { Text("Retry processing") }
                     if(state.recording && state.segments.any { it.text.isNotBlank() }) {
                         RecallPanel { Text("CATCH-UP",color=Mint,fontSize=12.sp)
@@ -129,6 +156,11 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                         }
                     }
                 }
+            }
+            if(page=="all") {
+                items(state.sessions,key={it.id}) { session -> RecallPanel(Modifier.clickable { selected=session.id;title=session.title;page="detail" }) {
+                    Text(time(session.start),color=Mint);Text(session.title,color=Sand,fontSize=20.sp)
+                } }
             }
             if(page=="detail") {
                 item {
@@ -160,7 +192,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                                 else playbackError="Open your calendar to add this reminder"
                             }) { Text("Add reminder") }
                         }
-                        Text("TRANSCRIPT",color=Color(0xFF8AABA0),fontSize=11.sp)
+                        Text("ORIGINAL TRANSCRIPT",color=Color(0xFF8AABA0),fontSize=11.sp)
                         Text(clip.text.ifBlank { "Audio saved · ${clip.status}" },color=Sand)
                         if(clip.speaker.isNotBlank()) Text(clip.speaker,color=Mint)
                         TextButton(onClick={replay(clip)}) { Text("▶ Replay original moment") }
@@ -193,6 +225,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                     Text("Your recordings, your control",color=Sand,fontWeight=FontWeight.Bold)
                     Text("Start only with consent. Pause stops the microphone. Delete a conversation from its notes screen to remove audio, transcript and search data. Android backup is disabled.",color=Color(0xFFACC6BD))
                     TextButton(onClick={repo.retry()},enabled=!state.busy) { Text("Retry queued clips") }
+                    TextButton(onClick={deleteDay=true},enabled=!state.recording && !state.busy) { Text("Delete ${if(dayOffset==0) "today" else "yesterday"}'s conversations") }
                 } }
             }
         }

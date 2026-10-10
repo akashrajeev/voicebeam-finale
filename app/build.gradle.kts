@@ -20,8 +20,8 @@ android {
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 119
-        versionName = "RECALL-1"
+        versionCode = 120
+        versionName = "RECALL-2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
@@ -32,6 +32,14 @@ android {
     // the release build is left unsigned instead of falling back to the debug key.
     val releaseKeystore = System.getenv("VB_RELEASE_KEYSTORE")
     signingConfigs {
+        if (System.getenv("VB_RECALL_KEYSTORE") != null) {
+            create("recallLab") {
+                storeFile = file(System.getenv("VB_RECALL_KEYSTORE"))
+                storePassword = System.getenv("VB_RECALL_KEY_PASSWORD")
+                keyAlias = "recall"
+                keyPassword = System.getenv("VB_RECALL_KEY_PASSWORD")
+            }
+        }
         if (releaseKeystore != null) {
             create("release") {
                 storeFile = file(releaseKeystore)
@@ -44,7 +52,7 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("recallLab") ?: signingConfigs.getByName("debug")
             // Debug also carries x86_64 so the emulator tests can run it.
             ndk { abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a") }
         }

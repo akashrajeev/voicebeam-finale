@@ -16,11 +16,21 @@ object RecallModelFiles {
     val embedding = Spec("embeddinggemma-2-text-270m.litertlm","https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm/resolve/9be6e8b90982095dc05c2bd162e4b954ee4dbac7/embeddinggemma-2-text-270m.litertlm",164626432L,"2d079ee2f6f066b1f368e8d7c819f55214eaef1d0513b312321901f30ab286fb")
     fun file(context: Context, spec: Spec) = File(context.filesDir,"recall-models/${spec.name}")
     fun ready(context: Context) = listOf(gemma,embedding).all { file(context,it).length()==it.size }
+    fun verify(context: Context, spec: Spec) {
+        val target=file(context,spec)
+        require(target.length()==spec.size) { "Install ${spec.name} first" }
+        val hash=MessageDigest.getInstance("SHA-256")
+        target.inputStream().buffered().use { src -> val buf=ByteArray(256*1024)
+            while(true) { val n=src.read(buf);if(n<0) break;hash.update(buf,0,n) }
+        }
+        require(hash.digest().joinToString("") { "%02x".format(it) }==spec.hash) { "Model verification failed. Reimport ${spec.name}." }
+    }
     fun install(context: Context, spec: Spec, uri: Uri? = null, progress: (String)->Unit) {
         val target = file(context,spec); target.parentFile!!.mkdirs()
-        if(target.length()==spec.size) return
-        require(target.parentFile!!.usableSpace > spec.size + 256_000_000L) { "Free storage for ${spec.name} and try again" }
+        if(uri==null && target.length()==spec.size) return
         val part = File(target.path+".part")
+        part.delete() // A process kill may leave an interrupted download. Never trust partial bytes.
+        require(target.parentFile!!.usableSpace > spec.size + 256_000_000L) { "Free storage for ${spec.name} and try again" }
         val connection = if(uri == null) (URL(spec.url).openConnection() as HttpURLConnection).apply {
             connectTimeout=30000; readTimeout=60000; instanceFollowRedirects=true
         } else null
@@ -36,6 +46,7 @@ object RecallModelFiles {
                 }
             } }
             require(total==spec.size && hash.digest().joinToString("") { "%02x".format(it) }==spec.hash) { "Model verification failed. Download again." }
+            if(target.exists()) check(target.delete()) { "Could not replace installed model" }
             check(part.renameTo(target)) { "Could not finish model installation" }
         } finally { connection?.disconnect(); part.delete() }
     }
