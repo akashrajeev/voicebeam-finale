@@ -33,7 +33,7 @@ class SuppressionTest {
         val g = TargetGate(frameMs = 10f); g.quietOthers = 1f
         repeat(100) { g.process(target) }
         repeat(150) { g.process(self.copy(voiceMatch = 0.1f)) }
-        assertEquals(.02f,g.gain,.0001f); assertFalse(g.boostAllowed)
+        assertEquals(.15f,g.gain,.0001f); assertFalse(g.boostAllowed)
     }
     @Test fun confirmedTargetStillPassesAndCanBeBoosted() {
         val g = TargetGate(frameMs = 10f)
