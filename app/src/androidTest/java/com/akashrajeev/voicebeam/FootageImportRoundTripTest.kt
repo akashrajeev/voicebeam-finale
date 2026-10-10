@@ -55,7 +55,7 @@ class FootageImportRoundTripTest {
         } finally { if(started)muxer.stop();muxer.release();codec.stop();codec.release() }
     }
     /** A real AAC MP4 with its audio track 300ms late, previously rejected at 50ms. */
-    @Test fun lateAudioAlignsAndExportsOnVideoTimeline()=runBlocking {
+    @Test fun lateAudioAlignsAndExportsOnVideoTimeline(): Unit=runBlocking {
         val audio=fixture("1089-134686-0013.wav").copyOf(16000*6)
         val folder=File(context.cacheDir,"offset-roundtrip").apply{mkdirs()}
         var session:com.akashrajeev.voicebeam.record.SessionMeta?=null
