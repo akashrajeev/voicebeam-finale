@@ -35,6 +35,7 @@ fun StereoProbePanel(allowed:Boolean,onBusy:(Boolean)->Unit={}) {
     LaunchedEffect(busy){onBusy(busy)}
     DisposableEffect(Unit){onDispose{job?.cancel();onBusy(false)}}
     BackHandler(enabled=busy){job?.cancel();status="Cancelled"}
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(6.dp)) {
     SectionHeader("Stereo microphone test")
     Text("Diagnostic only, not direction isolation. About 40 seconds of microphone capture across 8 configurations. No audio saved or uploaded. Report stays on this phone until you choose Share.",color=Muted)
     Text("Keep the phone still. For each 5-second test, speak from its LEFT side first, then RIGHT when prompted. Distinct channels alone do not prove two speakers can be separated.",color=Muted)
@@ -55,6 +56,7 @@ fun StereoProbePanel(allowed:Boolean,onBusy:(Boolean)->Unit={}) {
     if(status.isNotBlank())Text(status,color=Muted)
     report?.let { file->TextButton(onClick={shareStereoReport(context,file)},enabled=!busy){Text("Share stereo report")} }
     Spacer(Modifier.height(10.dp))
+    }
 }
 private fun shareStereoReport(context:Context,file:File){
     val uri=FileProvider.getUriForFile(context,context.packageName+".files",file)
