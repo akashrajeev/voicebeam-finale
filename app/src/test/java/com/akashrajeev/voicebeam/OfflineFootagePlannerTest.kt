@@ -94,10 +94,10 @@ class OfflineFootagePlannerTest {
     }
 
     @Test fun planThatAbstainsUnderPerturbationIsUnstable() {
-        // two groups at cos ~0.45: two clusters at mergeCos 0.5 (plans), one cluster at 0.4/0.45 (abstain flip). A flip must count as agreement 0.
+        // two groups at cos ~0.43: two clusters at the 0.45 pin (plans), one cluster at 0.40 (abstain flip). A flip must count as agreement 0.
         val ws = ArrayList<WindowEmbedding>()
         var i = 0
-        for ((ang, cnt) in listOf(0.0 to 10, 1.1 to 12)) for (n in 0 until cnt) {
+        for ((ang, cnt) in listOf(0.0 to 10, 1.13 to 12)) for (n in 0 until cnt) {
             ws.add(WindowEmbedding(i * 0.5f, i * 0.5f + 1.5f, vec(ang, (n % 3) * 0.03))); i++
         }
         val r = OfflineFootagePlanner.plan(ws, 12f, tap = iv(0f, 3f))
