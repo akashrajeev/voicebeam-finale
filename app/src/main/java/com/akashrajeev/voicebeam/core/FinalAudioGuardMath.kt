@@ -20,6 +20,9 @@ object FinalAudioGuardMath {
     const val OUTPUT_MIN_COSINE = 0.32f
     const val HOMOGENEOUS_SOURCE_COSINE = 0.6f
     const val MAX_HOMOGENEOUS_LOSS = 0.45f
+    /** Per-chunk floor: used ONLY for fallback/extraction outputs (OfflineQualityGuard); routed renders legitimately contain ducked other-speaker chunks near 0. Reject if MORE than MAX_BELOW_FRACTION of scored chunks have output cosine below CHUNK_FLOOR (kills the mean-pooling hole). Provisional, no device data. */
+    const val CHUNK_FLOOR = 0.25f
+    const val MAX_BELOW_FRACTION = 0.25f
 
     fun selectedFraction(labels: Array<Seg>, a: Int, b: Int, sampleRate: Int = 16000): Float {
         require(a in 0 until b) { "bad chunk" }
@@ -49,4 +52,17 @@ object FinalAudioGuardMath {
         chunks > 0 && sourceScore.isFinite() && outputScore.isFinite() &&
             outputScore >= OUTPUT_MIN_COSINE &&
             !(sourceScore >= HOMOGENEOUS_SOURCE_COSINE && outputScore < sourceScore - MAX_HOMOGENEOUS_LOSS)
+
+    /** True when more than [MAX_BELOW_FRACTION] of chunks score below [CHUNK_FLOOR]. Exactly 25% below is allowed. Non-finite scores count as below. */
+    fun tooManyWeakChunks(outputScores: FloatArray): Boolean {
+        if (outputScores.isEmpty()) return true
+        val below = outputScores.count { !it.isFinite() || it < CHUNK_FLOOR }
+        return below * 4 > outputScores.size // 25% expressed in integers to avoid float boundary error
+    }
+
+    /** Mean rule (see [pass]) AND the per-chunk floor (fallback/extraction semantics, not for routed renders). */
+    fun passChunks(sourceScores: FloatArray, outputScores: FloatArray): Boolean {
+        if (sourceScores.size != outputScores.size || outputScores.isEmpty()) return false
+        return pass(sourceScores.average().toFloat(), outputScores.average().toFloat(), outputScores.size) && !tooManyWeakChunks(outputScores)
+    }
 }
