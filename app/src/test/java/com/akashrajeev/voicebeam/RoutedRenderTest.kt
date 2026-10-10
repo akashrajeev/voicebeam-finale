@@ -90,4 +90,31 @@ class RoutedRenderTest {
     @Test(expected = IllegalArgumentException::class) fun protectNanRejected() {
         val y = tone(1f); y[0] = Float.NaN; RoutedRender.protect(y, tone(1f), BooleanArray(100))
     }
+
+    @Test fun extractorWeightIsExactlyZeroInOtherOnlyInteriors() {
+        val labels = arrayOf(Seg.OVERLAP, Seg.OTHER_ONLY, Seg.OTHER_ONLY, Seg.OTHER_ONLY, Seg.OVERLAP)
+        val xf = 0.05f; val k = (xf * sr / 2f).toInt()
+        val n = sr * 5 / 2
+        val w = RoutedRender.weights(n, false, true, labels, sr, -18f, xf)
+        val binLen = sr / 2
+        // interior = at least k+1 samples away from every OVERLAP sample
+        for (i in (binLen + k + 1) until (4 * binLen - k - 1)) assertEquals("sample $i", 0f, w.extracted[i], 0f)
+        // and the extractor does contribute inside the OVERLAP bins away from edges
+        assertEquals(1f, w.extracted[binLen / 2], 1e-6f)
+    }
+    @Test fun weightsSumToOneEverywhere() {
+        val labels = arrayOf(Seg.TARGET_ONLY, Seg.OTHER_ONLY, Seg.OVERLAP, Seg.NONE, Seg.OVERLAP)
+        val w = RoutedRender.weights(sr * 5 / 2, true, true, labels, sr, -18f, 0.05f)
+        for (i in w.gain.indices) assertEquals(1f, w.original[i] + w.denoised[i] + w.extracted[i], 1e-4f)
+    }
+    @Test fun protectNonVoicedFrameCarriesNoRampResidue() {
+        val x = FloatArray(512 * 12) { 0.3f }
+        val voiced = BooleanArray(12) { it < 4 }
+        val out = RoutedRender.protect(x, x, voiced, floor = 0.04f, ctxFrames = 0)
+        // frame 4 is the first non-voiced frame: it must already sit at the floor from its first sample
+        assertEquals(0.3f * 0.04f, out[4 * 512], 1e-4f)
+        assertEquals(0.3f * 0.04f, out[5 * 512 - 1], 1e-4f)
+        // the ramp happened inside frame 3 and is continuous
+        assertTrue(RoutedRender.maxStep(out) < 0.01f)
+    }
 }
