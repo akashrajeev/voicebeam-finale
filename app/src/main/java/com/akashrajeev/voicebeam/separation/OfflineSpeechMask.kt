@@ -6,7 +6,8 @@ import java.nio.FloatBuffer
 
 /** SileroV5 512-sample windows WITH64-sample context; independent of live VAD. */
 object OfflineSpeechMask {
-    fun compute(context: Context, samples: FloatArray): BooleanArray {
+    /** [isCancelled] is polled every 16 frames (~0.5 s of audio); default false keeps old callers unchanged. */
+    fun compute(context: Context, samples: FloatArray, isCancelled: () -> Boolean = { false }): BooleanArray {
         val env=OrtEnvironment.getEnvironment()
         val model=context.assets.open("models/silero_vad_v5.onnx").use{it.readBytes()}
         val mask=BooleanArray((samples.size+511)/512)
@@ -15,6 +16,7 @@ object OfflineSpeechMask {
         OrtSession.SessionOptions().apply{setIntraOpNumThreads(1)}.use { options -> env.createSession(model,options).use { session ->
             OnnxTensor.createTensor(env,16000L).use { rate ->
                 for(f in mask.indices) {
+                    if(f%16==0 && isCancelled()) throw kotlinx.coroutines.CancellationException("Speech mask cancelled")
                     val frame=FloatArray(576);history.copyInto(frame)
                     samples.copyInto(frame,64,f*512,minOf((f+1)*512,samples.size))
                     OnnxTensor.createTensor(env,FloatBuffer.wrap(frame),longArrayOf(1,576)).use { input ->
