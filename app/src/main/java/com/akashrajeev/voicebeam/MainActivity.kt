@@ -25,7 +25,7 @@ import com.akashrajeev.voicebeam.ui.SettingsScreen
 import com.akashrajeev.voicebeam.ui.SetupScreen
 import com.akashrajeev.voicebeam.ui.VoiceBeamTheme
 
-enum class Screen { SETUP, FOCUS, CAPTIONS, SESSIONS, SETTINGS, RECALL }
+enum class Screen { SETUP, FOCUS, CAPTIONS, SESSIONS, SETTINGS, RECALL, FOOTAGE }
 
 class MainActivity : ComponentActivity() {
     private val engine: VoiceBeamEngine get() = (application as VoiceBeamApp).engine
@@ -72,7 +72,12 @@ fun App(engine: VoiceBeamEngine, permsGranted: Boolean, requestPerms: () -> Unit
     BackHandler(enabled = screen != Screen.SETUP && screen != Screen.FOCUS) { screen = Screen.FOCUS }
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(screen) {
+        if(screen == Screen.FOOTAGE) {
+            // Imported-file analysis must not compete with live microphone or duplicate Listen models.
+            engine.releaseModels()
+        }
         if(screen == Screen.FOCUS || screen == Screen.CAPTIONS) {
+            engine.loadModels()
             val recall = (context.applicationContext as VoiceBeamApp).recall
             if(recall.state.value.recording) context.startService(android.content.Intent(context, com.akashrajeev.voicebeam.recall.RecallRecorderService::class.java).setAction(com.akashrajeev.voicebeam.recall.RecallRecorderService.STOP))
         }
@@ -88,6 +93,7 @@ fun App(engine: VoiceBeamEngine, permsGranted: Boolean, requestPerms: () -> Unit
             if (screen == Screen.CAPTIONS) CaptionScreen(engine) { screen = Screen.FOCUS }
         }
         Screen.SESSIONS -> SessionsScreen(engine, onNavigate = { screen = it })
+        Screen.FOOTAGE -> com.akashrajeev.voicebeam.footage.FootageScreen(onNavigate = { screen = it })
         Screen.RECALL -> com.akashrajeev.voicebeam.recall.RecallScreen(onNavigate = { screen = it })
         Screen.SETTINGS -> SettingsScreen(engine, onNavigate = { screen = it })
     }

@@ -7,6 +7,7 @@ class VoiceBeamApp : Application() {
     lateinit var engine: VoiceBeamEngine
         private set
 
+    val footage by lazy { com.akashrajeev.voicebeam.footage.FootageRepository(this) }
     val recall by lazy { com.akashrajeev.voicebeam.recall.RecallRepository(this) }
 
     override fun onCreate() {

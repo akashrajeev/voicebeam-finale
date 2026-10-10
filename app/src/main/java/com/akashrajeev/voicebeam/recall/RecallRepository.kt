@@ -281,6 +281,20 @@ class RecallRepository(private val context: Context) {
         } catch(t: Exception) { synchronized(this@RecallRepository) { _state.value=_state.value.copy(askMessage=t.message?:"Try your question again") } }
         finally { synchronized(this@RecallRepository) { _state.value=_state.value.copy(asking=false) } }
     }
+    suspend fun transcribeImported(file: File): String = inference.withLock {
+        check(!_state.value.recording) { "Pause Recall before processing footage" }
+        models.initialize()
+        val samples=com.akashrajeev.voicebeam.core.WavWriter.read(file).first
+        val speech=RecallSpeechGate(context).use { it.speechOnly(samples) }?:return@withLock ""
+        val filtered=File(context.cacheDir,"footage-speech-${System.nanoTime()}.wav")
+        val result=try {
+            com.akashrajeev.voicebeam.core.WavWriter(filtered,16000).use { it.write(speech) }
+            models.transcribe(filtered.path)
+        } finally { filtered.delete() }
+        check(!RecallPromptGuard.contaminated(result)) { "Instruction echo held for review. Replay or retry this moment." }
+        check(!RecallTranscriptQuality.repeatedLoop(result)) { "Repeated output held for review. Replay or retry this moment." }
+        if(result=="NO_SPEECH") "" else result
+    }
     fun rename(session: Long, title: String) = scope.launch { store.rename(session,title);refresh() }
     fun nameSpeaker(id: Long, speaker: String) = scope.launch {
         val name=speaker.trim().take(80)

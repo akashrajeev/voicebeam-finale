@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -58,6 +59,7 @@ fun BottomNav(current: Screen, onNavigate: (Screen) -> Unit) {
     ) {
         NavItem(Icons.Filled.CenterFocusStrong, "Listen", current == Screen.FOCUS) { onNavigate(Screen.FOCUS) }
         NavItem(Icons.AutoMirrored.Filled.ViewList, "Recall", current == Screen.RECALL) { onNavigate(Screen.RECALL) }
+        NavItem(Icons.Filled.Videocam, "Footage", current == Screen.FOOTAGE) { onNavigate(Screen.FOOTAGE) }
         NavItem(Icons.Filled.Settings, "Settings", current == Screen.SETTINGS) { onNavigate(Screen.SETTINGS) }
     }
 }
@@ -65,7 +67,7 @@ fun BottomNav(current: Screen, onNavigate: (Screen) -> Unit) {
 @Composable
 private fun NavItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
     val c = if (selected) Accent else Muted
-    Column(Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 4.dp),
+    Column(Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, contentDescription = label, tint = c)
         Text(label, color = c, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
