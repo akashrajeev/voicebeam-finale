@@ -77,4 +77,19 @@ class OfflineFootagePlannerTest {
         assertTrue("expected Abstain($reason) got $r", r is PlanResult.Abstain)
         assertEquals(reason, (r as PlanResult.Abstain).reason)
     }
+
+    @Test fun unstablePlanAbstains() {
+        // target group (angle 0), a "mid" group (angle 1.0, cos ~0.54: merges below mergeCos 0.54, splits above), and a distant other speaker
+        val ws = ArrayList<WindowEmbedding>()
+        var i = 0
+        for ((ang, cnt) in listOf(0.0 to 10, 1.0 to 12, 3.0 to 10)) for (n in 0 until cnt) {
+            ws.add(WindowEmbedding(i * 0.5f, i * 0.5f + 1.5f, vec(ang, (n % 3) * 0.03))); i++
+        }
+        val r = OfflineFootagePlanner.plan(ws, 17f, tap = iv(0f, 3f))
+        assertAbstain(AbstainReason.PLAN_UNSTABLE, r)
+    }
+    @Test fun stablePlanStillPlans() {
+        val r = OfflineFootagePlanner.plan(windows(), 20f, tap = iv(1f, 6f))
+        assertTrue(r is PlanResult.Plan)
+    }
 }
