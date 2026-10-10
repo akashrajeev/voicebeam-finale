@@ -18,7 +18,7 @@ jobs:
           java-version: '17'
       - name: Fetch pinned baseline models and runtime
         run: bash scripts/fetch_models.sh
-      - name: Compile all baseline and cumulative stage3b footage unit tests
+      - name: Compile all baseline and cumulative stage3f footage unit tests
         run: ./gradlew --no-daemon :app:testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
       - name: Internal reports and APK
         if: always()
