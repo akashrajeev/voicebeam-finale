@@ -9,7 +9,8 @@ import java.nio.ByteOrder
 
 /** Bounded local-file decode. Does not use the microphone or face pipeline. */
 object VideoAudioDecoder {
-    fun decode(file: File): FloatArray {
+    /** [isCancelled] is polled each codec loop iteration and every 16000 output samples while resampling; default false keeps old callers unchanged. */
+    fun decode(file: File, isCancelled: () -> Boolean = { false }): FloatArray {
         val ex = MediaExtractor()
         var codec: MediaCodec? = null
         try {
@@ -42,6 +43,7 @@ object VideoAudioDecoder {
             val info = MediaCodec.BufferInfo()
             val start = SystemClock.elapsedRealtime()
             while (!outputEnd) {
+                if (isCancelled()) throw kotlinx.coroutines.CancellationException("Video decode cancelled")
                 require(SystemClock.elapsedRealtime() - start < 45000) { "Video decode timed out" }
                 if (!inputEnd) {
                     val index = decoder.dequeueInputBuffer(10000)
@@ -82,6 +84,7 @@ object VideoAudioDecoder {
             require(kotlin.math.abs(count.toDouble()/sr - duration/1000000.0) <= .1) { "Audio/video lengths differ; trim your video first" }
             // Band-limited arbitrary-rate conversion, not live processing.
             return FloatArray(outputSize) { j ->
+                if (j % 16000 == 0 && isCancelled()) throw kotlinx.coroutines.CancellationException("Video decode cancelled")
                 val x = j.toDouble() * sr / 16000
                 val center = x.toInt(); val cutoff = minOf(1.0, 16000.0/sr) * .9
                 var sum = 0.0; var weight = 0.0
