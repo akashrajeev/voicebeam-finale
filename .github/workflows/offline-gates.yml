@@ -1,4 +1,4 @@
-name: Offline video candidate reference gate v6
+name: Offline video guard validation v7
 on:
   push:
     branches: [experiment-10]
@@ -40,10 +40,9 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: |
-            code=0; ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.OfflineVideoRoundTripTest -Dorg.gradle.jvmargs="-Xmx3g" || code=$?
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.OfflineVideoRoundTripTest -Dorg.gradle.jvmargs="-Xmx3g"
             adb logcat -d -s OfflineGuard:I TseTest:I > offline-extractor-log.txt
             cat offline-extractor-log.txt
-            test "$code" = 0
             ./gradlew --no-daemon installDebug installDebugAndroidTest -Dorg.gradle.jvmargs="-Xmx3g"
             adb shell am instrument -w -e class com.akashrajeev.voicebeam.OfflineImportUiTest com.akashrajeev.voicebeam.finale.test/androidx.test.runner.AndroidJUnitRunner | tee offline-ui-instrument.txt
             grep -q '^OK (2 tests)' offline-ui-instrument.txt
