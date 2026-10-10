@@ -39,7 +39,7 @@ class TargetGate(
 ) {
     @Volatile var tuning = GateTuning()
     private var strictHoldLeft = 0f
-    private var lastScoreSequence = 0L
+        private var lastScoreSequence = 0L
     private var voiceConfirmations = 0
     private var firstHighQuerySamples = 0L
     var state: TargetState = TargetState.UNLOCKED
@@ -72,6 +72,24 @@ class TargetGate(
             (i.voiceMatch ?: 0f) > tuning.targetThreshold && i.lockedSpeaking > 0.1f -> TargetState.TARGET
             else -> TargetState.UNCERTAIN
         }
+        if (tuning.conversationCandidate) {
+        val fresh = i.voiceScoreSequence > 0 && i.voiceScoreAgeMs in 0..1000 &&
+            i.voiceMatch?.isFinite() == true && i.voiceQuerySamples >= 16000
+        val overlapping = i.lockedSpeaking > .55f && i.othersSpeaking > .55f
+        val qualified = i.hasLock && i.voiceLearned && i.lockedVisible && !i.audioOnly &&
+            !i.wearerVetoEnabled && !wearerVeto(i) && !overlapping
+        state = when {
+            // Unknown, stale and overlap are not evidence for attenuation or target boost.
+            i.hasLock && i.voiceLearned && overlapping -> TargetState.OVERLAP
+            i.hasLock && i.voiceLearned && !fresh -> TargetState.UNCERTAIN
+            qualified && i.othersSpeaking <= .3f && (i.voiceMatch ?: 0f) >= tuning.targetThreshold -> TargetState.TARGET
+            qualified && i.voiceActive && i.lockedSpeaking < .3f && (i.voiceMatch ?: 1f) <= .35f -> TargetState.OTHER
+            i.hasLock && i.voiceLearned && rawState == TargetState.TARGET &&
+                (i.wearerVetoEnabled || i.othersSpeaking > .3f) -> TargetState.UNCERTAIN
+            qualified && rawState == TargetState.TARGET && (i.voiceMatch ?: 0f) < tuning.targetThreshold -> TargetState.UNCERTAIN
+            else -> rawState
+        }
+        } else {
         if (!i.hasLock || !i.voiceLearned || !i.lockedVisible || wearerVeto(i) ||
             i.wearerVetoEnabled || rawState == TargetState.OTHER || i.othersSpeaking > .3f) {
             voiceConfirmations = 0
@@ -94,6 +112,7 @@ class TargetGate(
             rawState == TargetState.UNCERTAIN && voiceConfirmations >= 2 && i.voiceQuerySamples - firstHighQuerySamples >= 24000 && i.voiceScoreAgeMs <= 1000 &&
                 (i.voiceMatch ?: 0f) >= tuning.targetThreshold -> TargetState.TARGET
             else -> rawState
+        }
         }
         return when (state) {
             TargetState.UNLOCKED -> 1f
@@ -150,8 +169,13 @@ class TargetGate(
         // Squared residual gives useful suppression despite proximity to the phone mic.
         // Misfire safety floor15% amplitude prevents erasing target on a bad OTHER decision.
         val residual = maxOf(0.15f, (1f - strength) * (1f - strength))
+        val fresh = i.voiceScoreSequence > 0 && i.voiceScoreAgeMs in 0..1000 &&
+            i.voiceMatch?.isFinite() == true && i.voiceQuerySamples >= 16000
+        val safeUnknown = i.hasLock && i.voiceLearned &&
+            (!fresh || state == TargetState.UNCERTAIN || state == TargetState.OVERLAP || !i.lockedVisible)
         val wanted = when {
             !i.hasLock -> 1f
+            tuning.conversationCandidate && safeUnknown -> 1f
             fullStrict && state == TargetState.OTHER -> residual // preserve explicit OTHER policy
             fullResidual -> strict.residualGain // includes quiet, music, overlap and face loss
             fullStrict && strictHoldLeft > 0f && state != TargetState.TARGET -> 1f
