@@ -1,0 +1,43 @@
+name: Offset edit-list decoder diagnostic
+on:
+  push:
+    branches: [exp-13-recall-gemma]
+    paths: ['.github/workflows/offset-container.yml']
+permissions:
+  contents: read
+jobs:
+  offset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: bash scripts/fetch_models.sh
+      - run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          VB_EMULATOR: '1'
+        with:
+          api-level: 29
+          arch: x86_64
+          disable-animations: true
+          script: |
+            trap 'adb logcat -d -s OffsetFixture:I > offset-container-log.txt' EXIT
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OffsetContainerTest -Dorg.gradle.jvmargs="-Xmx3g"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offset-container-${{ github.sha }}
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            offset-container-log.txt
+          retention-days: 1
