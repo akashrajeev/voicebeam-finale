@@ -4,20 +4,27 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Label the checked-out source, not the event that requested a build.
+val sourceCommit = providers.exec {
+    commandLine("git", "rev-parse", "HEAD")
+}.standardOutput.asText.get().trim().also {
+    require(it.matches(Regex("[0-9a-f]{40}"))) { "Cannot determine checked-out source commit" }
+}
+
 android {
     namespace = "com.akashrajeev.voicebeam"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.akashrajeev.voicebeam.lab"
+        applicationId = "com.akashrajeev.voicebeam.finale"
         minSdk = 26
         targetSdk = 35
-        buildConfigField("String", "LAB_COMMIT", "\"" + (System.getenv("GITHUB_SHA") ?: "local") + "\"")
-        versionCode = 106
-        versionName = "ENH-6"
+        buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
+        versionCode = 128
+        versionName = "RECALL-LISTEN-5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
         }
     }
 
@@ -25,6 +32,14 @@ android {
     // the release build is left unsigned instead of falling back to the debug key.
     val releaseKeystore = System.getenv("VB_RELEASE_KEYSTORE")
     signingConfigs {
+        if (System.getenv("VB_RECALL_KEYSTORE") != null) {
+            create("recallLab") {
+                storeFile = file(System.getenv("VB_RECALL_KEYSTORE"))
+                storePassword = System.getenv("VB_RECALL_KEY_PASSWORD")
+                keyAlias = "recall"
+                keyPassword = System.getenv("VB_RECALL_KEY_PASSWORD")
+            }
+        }
         if (releaseKeystore != null) {
             create("release") {
                 storeFile = file(releaseKeystore)
@@ -37,9 +52,9 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("recallLab") ?: signingConfigs.getByName("debug")
             // Debug also carries x86_64 so the emulator tests can run it.
-            ndk { abiFilters += listOf("arm64-v8a") }
+            ndk { abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a") }
         }
         release {
             // R8 stays off until a minified build has been run on a device: the sherpa-onnx JNI layer
@@ -54,9 +69,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+
     buildFeatures { compose = true; buildConfig = true }
-    androidResources { noCompress += listOf("onnx", "task", "txt") }
+    androidResources { noCompress += listOf("onnx", "task", "txt", "bin") }
     packaging {
         jniLibs { useLegacyPackaging = true }
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -65,7 +80,9 @@ android {
 }
 
 dependencies {
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
     implementation(files("libs/sherpa-onnx.aar"))
+    implementation(files("libs/onnxruntime-java-jni.aar"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
@@ -112,3 +129,5 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
 }
+
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
