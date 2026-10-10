@@ -65,6 +65,14 @@ class OfflineFootagePlannerTest {
         val r = OfflineFootagePlanner.plan(ws, 20f, tap = iv(8.5f, 13.5f), lipBinned = aLip()) as PlanResult.Plan
         assertEquals(TargetSource.TAP, r.source); assertEquals(clusters[20], r.target)
     }
+    @Test fun evenSplitTapAbstainsInsteadOfPickingArbitrarily() {
+        // 5 windows of A vs 5 of B inside [5, 11]
+        assertAbstain(AbstainReason.TAP_NOT_IN_CLUSTER, OfflineFootagePlanner.plan(windows(), 20f, tap = iv(5f, 11f)))
+    }
+    @Test fun malformedTapRejectedEvenWhenNoClusters() {
+        val ws = windows().map { WindowEmbedding(it.startSec, it.endSec, null) }
+        try { OfflineFootagePlanner.plan(ws, 20f, tap = iv(15f, 25f)); fail("expected IllegalArgumentException") } catch (e: IllegalArgumentException) {}
+    }
     private fun assertAbstain(reason: AbstainReason, r: PlanResult) {
         assertTrue("expected Abstain($reason) got $r", r is PlanResult.Abstain)
         assertEquals(reason, (r as PlanResult.Abstain).reason)
