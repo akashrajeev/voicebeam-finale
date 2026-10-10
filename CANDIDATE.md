@@ -77,3 +77,11 @@ unchanged. Android compilation/Settings pixels still pending CI/device. No main
 merge. Test original recording before declaring a hearing improvement.
 
 Proxy bake-off reported by research: TitaNet gap0.669 raw vs0.485 GTCRN and0.578 DPDFNet-2. Therefore RAW stays default; denoising is not assumed better. Synthetic proxy, not this room. Enroll/test RAW first, then toggle denoised, restart/relearn and repeat.
+
+# Experiment-7: FULL learned strict focus (Build 5)
+
+Base experiment-3 e8e30ce. Hearing GTCRN, captions RAW/Moonshine Tiny and RAW TitaNet matcher remain unchanged; no experiment-6 caption changes imported. Full is the new Settings default; Speech-only retains experiment-3 behavior, and Strict learned focus OFF disables both modes.
+
+Once learned and locked, Full applies the strict residual (20% default amplitude) to all unconfirmed audio after target hangover, including VAD-false music/room tone. Explicit OTHER keeps its existing stronger quietOthers attenuation. TARGET and its noncontradictory flickers are protected by configurable strict hangover. Unlock/unlearned disables strict. Other/overlap/face-loss contradict and clear hangover as before; Full can duck overlapping target too. Rise 25ms / strict fall 250ms remains unchanged. This is a scalar gate, not source separation: background mixed with a confirmed target can still pass; no removal of ambient acoustic sound through earphones is possible.
+
+Settings persists strictFull independently from strictFocus. Diagnostic lines report full or speech-only. 112 host JVM tests pass (103 baseline + 9 Full checks); experiment-6's three caption tests are not in this branch. Android compile, Settings pixels, audible pumping, music ducking and target retention need CI/phone verification.
