@@ -46,6 +46,18 @@ class FaceTrackBinner(private val durationSec: Float) {
         return if (hypot(c.box.cx - nx, c.box.cy - ny) < 0.25f) c.id else null
     }
 
+    /** Tracked faces near [timeSec] (latest sample per track within 0.5 s), for drawing tappable boxes. Same-frame data only; not a claim the face is talking. */
+    fun facesAt(timeSec: Float): List<Pair<Int, Box>> {
+        val t = (timeSec * 1000f).toLong()
+        return samples.filter { kotlin.math.abs(it.tMs - t) <= 500 }
+            .groupBy { it.id }
+            .map { (id, l) -> id to l.minByOrNull { kotlin.math.abs(it.tMs - t) }!!.box }
+            .sortedBy { it.first }
+    }
+
+    /** Video time of the first analysed face sample, or null if no face was ever tracked. */
+    fun firstFaceSec(): Float? = samples.firstOrNull()?.let { it.tMs / 1000f }
+
     class Series(val targetLipOn: BooleanArray, val othersOff: BooleanArray?, val otherTrackCount: Int)
 
     /** Per-bin evidence for TapProposal.propose. [othersOff] is null when no other face was ever tracked (a proposal is then WEAK). */
