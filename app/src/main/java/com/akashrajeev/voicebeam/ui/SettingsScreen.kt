@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -31,6 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.akashrajeev.voicebeam.core.GroqKey
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.akashrajeev.voicebeam.BuildConfig
@@ -49,24 +53,28 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     }
     val s by engine.settings.collectAsState()
     val state by engine.state.collectAsState()
+    val recall by (context.applicationContext as com.akashrajeev.voicebeam.VoiceBeamApp).recall.state.collectAsState()
+    var probeBusy by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.weight(1f).statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             Text("Settings", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
-            Text("ENH-6: enhancement and turn suppression, not overlap separation", color = Muted, fontSize = 12.sp)
+            Text("ENH-7: enhanced listening and speaker-turn focus", color = Muted, fontSize = 12.sp)
             Text(engine.enrollmentMessage(), color = Muted, fontSize = 12.sp)
-            Text("Uncertain voice passes enhanced audio without boost. Only clear other-speaker evidence turns it down.", color = Muted, fontSize = 12.sp)
+            Text("Strict focus lowers unconfirmed sound after learning. It can lower the target on misses; overlapping voices are not separated.", color = Muted, fontSize = 12.sp)
             SectionHeader("Listening")
             SliderRow("Noise removal", when { s.denoise < 0.05f -> "Off"; s.denoise < 0.6f -> "Light"; else -> "Strong" }, s.denoise, 0f..1f) { v -> engine.updateSettings { it.copy(denoise = v) } }
             SliderRow("Quiet others (default)", "${(s.quietOthers * 100).roundToInt()}%", s.quietOthers, 0f..1f) { v -> engine.updateSettings { it.copy(quietOthers = v) } }
             SliderRow("Hearing boost", "+${s.boostDb.roundToInt()} dB", s.boostDb, 0f..24f) { v -> engine.updateSettings { it.copy(boostDb = v) } }
             SwitchRow("Point mic at the scene", "Uses the camcorder mic setup, best with the back camera", s.useSceneMic) { v -> engine.updateSettings { it.copy(useSceneMic = v) } }
+            ListenTuningPanel(s,engine::updateSettings)
             SectionHeader("Captions")
             ValueRow("Language", "English")
-            SwitchRow("Require thumbs-up AND \"I agree\"", "Stricter consent: both within 5 seconds. Off = either one is enough", s.requireBothConsent) { v -> engine.updateSettings { it.copy(requireBothConsent = v) } }
+                        SwitchRow("Require thumbs-up AND \"I agree\"", "Stricter consent: both within 5 seconds. Off = either one is enough", s.requireBothConsent) { v -> engine.updateSettings { it.copy(requireBothConsent = v) } }
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
             Text("Caption size", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
             Segmented(listOf("Small", "Medium", "Large"), s.captionSize) { i -> engine.updateSettings { it.copy(captionSize = i) } }
             SectionHeader("Saving")
+            Button(onClick = { onNavigate(Screen.SESSIONS) }) { Text("Saved Listen sessions") }
             Text("Default save mode", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
             Segmented(listOf("Audio", "Audio + video", "Captions"), s.saveMode.ordinal) { i -> engine.updateSettings { it.copy(saveMode = SaveMode.values()[i]) } }
             Text("Captions on video", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
@@ -87,6 +95,34 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             Text("Start Learn my voice on the listening screen so the microphone stays active.", color = Muted, fontSize = 12.sp)
             SwitchRow("Veto high-confidence wearer voice", "Off by default. May block a similar target; requires target voice learned too.", state.wearerVetoEnabled) { engine.setWearerVeto(it) }
             Button(onClick = { engine.clearWearerVoice() }) { Text("Clear my voice") }
+            SectionHeader("Online captions (optional)")
+            Text("Uses Groq Whisper for finished sentences when you add a key. It needs internet and sends that sentence's audio to Groq. If it fails, captions use the model on this phone.", color = Muted, fontSize = 12.sp)
+            var keyInput by remember { mutableStateOf("") }
+            var keySet by remember { mutableStateOf(GroqKey.load(listOf(context.getExternalFilesDir(null), context.filesDir)) != null) }
+            var keyMessage by remember { mutableStateOf("") }
+            Text(if (keySet) "Groq key: set" else "Groq key: not set", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+            OutlinedTextField(
+                value = keyInput, onValueChange = { keyInput = it }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(), textStyle = TextStyle(color = Color.White),
+                label = { Text("Paste Groq API key", color = Muted) }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
+            Row {
+                Button(onClick = {
+                    val ok = GroqKey.save(context.filesDir, keyInput)
+                    if (ok) {
+                        GroqKey.clear(listOf(context.getExternalFilesDir(null)))
+                        keySet = true; keyInput = ""
+                        keyMessage = "Saved. Fully close and reopen VoiceBeam to use it."
+                    } else {
+                        keyMessage = "That does not look like a Groq key."
+                    }
+                }) { Text("Save key") }
+                Button(onClick = {
+                    GroqKey.clear(listOf(context.getExternalFilesDir(null), context.filesDir))
+                    keySet = false; keyInput = ""; keyMessage = "Key removed."
+                }) { Text("Clear key") }
+            }
+            if (keyMessage.isNotEmpty()) Text(keyMessage, color = Muted, fontSize = 12.sp)
+            StereoProbePanel(com.akashrajeev.voicebeam.core.OfflineImportGate.allowed(recall.recording,recall.busy,recall.asking,recall.recapping,state.listening,state.recording.active,state.recording.exporting),onBusy={probeBusy=it})
             SectionHeader("Live diagnostics")
             Text("Local technical logs only. No audio, captions or uploads. Share sends a text file only when you choose an app.", color = Muted, fontSize = 12.sp)
             Row {
@@ -107,11 +143,11 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             }
             Text(diagnosticText.lines().takeLast(12).joinToString("\n"), color = Muted, fontSize = 10.sp)
             SectionHeader("Privacy")
-            Text("Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account and uploads nothing. The only network use is the optional stage-caption page on your own Wi-Fi.",
+            Text("Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account. Network use is the optional stage-caption page on your own Wi-Fi and, only if you add a Groq key, the audio of finished sentences sent to Groq for captions.",
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
             ValueRow("Version", BuildConfig.VERSION_NAME)
         }
-        BottomNav(Screen.SETTINGS, onNavigate)
+        if(!probeBusy) BottomNav(Screen.SETTINGS, onNavigate)
     }
 }
 
@@ -138,5 +174,20 @@ private fun SwitchRow(title: String, sub: String, checked: Boolean, onChange: (B
 private fun ValueRow(title: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
         Text(title, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f)); Text(value, color = Muted, fontSize = 13.sp)
+    }
+}
+
+@Composable
+fun ListenTuningPanel(s: com.akashrajeev.voicebeam.engine.Settings, update: ((com.akashrajeev.voicebeam.engine.Settings)->com.akashrajeev.voicebeam.engine.Settings)->Unit) {
+    Column(Modifier.fillMaxWidth()) {
+            SectionHeader("Candidate focus tuning")
+            SwitchRow("Strict learned focus", "Turn down unconfirmed audio after learning; may hide target on misses", s.strictFocus) { v -> update { it.copy(strictFocus = v) } }
+            Text("Strict mode", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+            Segmented(listOf("Speech-only", "Full"), if (s.strictFull) 1 else 0) { i -> update { it.copy(strictFull = i == 1) } }
+            Text("Full also ducks music and quiet audio; overlap may duck the target too.", color = Color.Gray, fontSize = 12.sp)
+            SliderRow("Unconfirmed residual gain", "${(s.strictResidual * 100).roundToInt()}% amplitude", s.strictResidual, .02f..1f) { v -> update { it.copy(strictResidual = v) } }
+            SliderRow("Target hangover", "${s.strictHangoverMs.roundToInt()} ms", s.strictHangoverMs, 0f..2000f) { v -> update { it.copy(strictHangoverMs = v) } }
+            SliderRow("Voice target threshold", "${(s.targetMatchThreshold * 100).roundToInt()} score", s.targetMatchThreshold, .2f.. .99f) { v -> update { it.copy(targetMatchThreshold = v) } }
+            SwitchRow("Denoised speaker matcher", "Changing clears learned profiles. Learn again on the selected feed; listening restarts if active.", s.matcherDenoised) { v -> update { it.copy(matcherDenoised = v) } }
     }
 }
