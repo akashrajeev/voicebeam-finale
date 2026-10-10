@@ -41,6 +41,7 @@ data class LiveState(
     val segments: List<CaptionSegment> = emptyList(),
     val partial: String = "",
     val partialIsTarget: Boolean = true,
+    val spatialStatus: String = "Not running",
     val earphones: String? = null,
     val recording: RecordingState = RecordingState(),
     val stageUrl: String? = null,
