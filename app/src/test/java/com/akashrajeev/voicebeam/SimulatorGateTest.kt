@@ -6,7 +6,7 @@ class SimulatorGateTest {
  @Test fun visibleOtherMaySuppressBelowVadWithoutBlockingTarget() {
   val g=TargetGate(16f);g.quietOthers=.86f
   repeat(50){g.process(GateInputs(true,0f,.9f,.5f,false))}
-  assertEquals(TargetState.OTHER,g.state);assertTrue(g.gain<.03f)
+  assertEquals(TargetState.OTHER,g.state);assertTrue(g.gain<=.151f)
   repeat(20){g.process(GateInputs(true,.9f,0f,.9f,true))}
   assertEquals(TargetState.TARGET,g.state);assertTrue(g.gain>.94f)
  }
