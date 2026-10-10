@@ -16,7 +16,10 @@ data class GateInputs(
     val wearerMatch: Float? = null, // fresh score of deliberately enrolled wearer, optional
     val wearerVetoEnabled: Boolean = false,
     val visionAgeMs: Long = -1, // source-frame age; -1 when absent
-    val voiceLearned: Boolean = true, // complete frozen enrollment, supplied by engine
+    val voiceLearned: Boolean = true,
+    val voiceQuerySamples: Long = 0,
+    val voiceScoreAgeMs: Long = Long.MAX_VALUE,
+    val voiceScoreSequence: Long = 0, // increments only for successful fresh query embeddings // complete frozen enrollment, supplied by engine
 
 )
 
@@ -36,6 +39,9 @@ class TargetGate(
 ) {
     @Volatile var tuning = GateTuning()
     private var strictHoldLeft = 0f
+    private var lastScoreSequence = 0L
+    private var voiceConfirmations = 0
+    private var firstHighQuerySamples = 0L
     var state: TargetState = TargetState.UNLOCKED
         private set
     var quietOthers: Float = 0.8f
@@ -49,7 +55,7 @@ class TargetGate(
         private set
 
     fun targetProbability(i: GateInputs): Float {
-        state = when {
+        val rawState = when {
             !i.hasLock -> TargetState.UNLOCKED
             !i.voiceLearned -> TargetState.UNCERTAIN
             !i.audioOnly && !i.lockedVisible -> TargetState.UNCERTAIN
@@ -65,6 +71,29 @@ class TargetGate(
             !i.lockedVisible -> TargetState.UNCERTAIN
             (i.voiceMatch ?: 0f) > tuning.targetThreshold && i.lockedSpeaking > 0.1f -> TargetState.TARGET
             else -> TargetState.UNCERTAIN
+        }
+        if (!i.hasLock || !i.voiceLearned || !i.lockedVisible || wearerVeto(i) ||
+            i.wearerVetoEnabled || rawState == TargetState.OTHER || i.othersSpeaking > .3f) {
+            voiceConfirmations = 0
+        }
+        if (i.voiceScoreSequence > 0 && i.voiceScoreSequence != lastScoreSequence) {
+            lastScoreSequence = i.voiceScoreSequence
+            val high = i.hasLock && i.voiceLearned && i.lockedVisible &&
+                !i.wearerVetoEnabled && !wearerVeto(i) && i.voiceScoreAgeMs <= 1000 && rawState != TargetState.OTHER &&
+                i.othersSpeaking <= .3f && (i.voiceMatch ?: 0f) >= tuning.targetThreshold
+            if (high) {
+                if (voiceConfirmations == 0) firstHighQuerySamples = i.voiceQuerySamples
+                voiceConfirmations = (voiceConfirmations + 1).coerceAtMost(2)
+            } else voiceConfirmations = 0
+        }
+        state = when {
+            i.hasLock && i.voiceLearned && i.lockedVisible && i.wearerVetoEnabled ->
+                if (rawState == TargetState.TARGET) TargetState.UNCERTAIN else rawState
+            i.hasLock && i.voiceLearned && i.lockedVisible && i.othersSpeaking > .3f &&
+                rawState == TargetState.TARGET -> TargetState.UNCERTAIN
+            rawState == TargetState.UNCERTAIN && voiceConfirmations >= 2 && i.voiceQuerySamples - firstHighQuerySamples >= 24000 && i.voiceScoreAgeMs <= 1000 &&
+                (i.voiceMatch ?: 0f) >= tuning.targetThreshold -> TargetState.TARGET
+            else -> rawState
         }
         return when (state) {
             TargetState.UNLOCKED -> 1f
@@ -88,7 +117,7 @@ class TargetGate(
         val p = targetProbability(i)
         if (!i.hasLock) {
             probability = 1f; holdLeft = 0f
-        } else if (i.voiceActive) {
+        } else if (i.voiceActive || state == TargetState.TARGET) {
             probability = p
             holdLeft = if (state == TargetState.TARGET) holdMs else 0f
         } else {
@@ -101,7 +130,7 @@ class TargetGate(
             !i.voiceLearned || (!i.audioOnly && !i.lockedVisible) || !i.hasLock
         strictHoldLeft = when {
             contradictory -> 0f
-            state == TargetState.TARGET && i.voiceActive -> strict.hangoverMs
+            state == TargetState.TARGET -> strict.hangoverMs
             else -> (strictHoldLeft - frameMs).coerceAtLeast(0f)
         }
         val fullStrict = strict.strictEnabled && strict.strictFull && i.hasLock && i.voiceLearned
@@ -110,7 +139,7 @@ class TargetGate(
         val strictResidual = strict.strictEnabled && i.hasLock && i.voiceLearned &&
             i.voiceActive && state == TargetState.UNCERTAIN && strictHoldLeft <= 0f
         val confirmed = !i.hasLock || ((i.audioOnly || i.lockedVisible) &&
-            ((i.voiceLearned && i.voiceActive && state == TargetState.TARGET) ||
+            ((i.voiceLearned && state == TargetState.TARGET) ||
                 (i.voiceLearned && !i.voiceActive && (if (fullStrict) strictHoldLeft > 0f else holdLeft > 0f))))
         // Provisional general monitor for a visible, not-yet-learned lock.
         // This does not attribute speech to the target or lower the gate gain.
@@ -119,8 +148,8 @@ class TargetGate(
         boostAllowed = confirmed || provisional
         val strength = quietOthers.coerceIn(0f, 1f)
         // Squared residual gives useful suppression despite proximity to the phone mic.
-        // At80% residual is4%; max attenuation keeps2% to avoid completely lost speech.
-        val residual = maxOf(0.02f, (1f - strength) * (1f - strength))
+        // Misfire safety floor15% amplitude prevents erasing target on a bad OTHER decision.
+        val residual = maxOf(0.15f, (1f - strength) * (1f - strength))
         val wanted = when {
             !i.hasLock -> 1f
             fullStrict && state == TargetState.OTHER -> residual // preserve explicit OTHER policy
@@ -140,7 +169,7 @@ class TargetGate(
 
     fun reset() {
         state = TargetState.UNLOCKED; probability = 1f; gain = 1f; holdLeft = 0f
-        hadLock = false; boostAllowed = true; strictHoldLeft = 0f
+        hadLock = false; boostAllowed = true; strictHoldLeft = 0f; lastScoreSequence = 0L; voiceConfirmations = 0
     }
 
     companion object {
