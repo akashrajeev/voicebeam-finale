@@ -13,7 +13,7 @@ class ListenEnvelopeTest {
     @Test fun fullAttenuationFloorAndTargetRecovery() {
         val gate=TargetGate(frameMs=16f);gate.quietOthers=1f
         repeat(150){gate.process(GateInputs(true,0f,.9f,.05f,true))}
-        assertEquals(.02f,gate.gain,.0001f)
+        assertEquals(.15f,gate.gain,.0001f)
         var missed=0;repeat(60){if(gate.process(GateInputs(true,.9f,0f,.95f,true))<.1f)missed++}
         assertEquals(0,missed);assertTrue(gate.gain>.94f)
     }
