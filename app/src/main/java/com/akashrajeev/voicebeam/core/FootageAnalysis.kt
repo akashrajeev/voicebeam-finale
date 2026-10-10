@@ -205,6 +205,9 @@ class ClusteredAnalysis private constructor(
     fun assignFace(lip: FloatArray, minCorr: Float = 0.25f, minMargin: Float = 0.15f, minBins: Int = 20) =
         FootageAnalysis.assignFace(activity, lip, minCorr, minMargin, minBins)
 
+    /** Cluster index per window (-1 = abstained). Read-only copy. */
+    fun windowClusters(): List<Int> = result.assign.toList()
+
     internal fun activityCopy(): Array<BooleanArray> = Array(activity.size) { activity[it].copyOf() }
 
     fun forTarget(target: Int): TargetAnalysis = TargetAnalysis(this, target)
