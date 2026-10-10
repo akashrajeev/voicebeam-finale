@@ -12,7 +12,8 @@ import kotlinx.coroutines.sync.withLock
 data class RecallUiState(val recording: Boolean = false, val message: String = "Ready to remember",
     val sessions: List<RecallSession> = emptyList(), val segments: List<RecallSegment> = emptyList(),
     val modelsReady: Boolean = false, val busy: Boolean = false, val asking: Boolean = false, val answers: List<RecallAnswer> = emptyList(),
-    val recordingSession: Long? = null, val recordingDuration: Long = 0L)
+    val recordingSession: Long? = null, val recordingDuration: Long = 0L, val askMessage: String = "", val recap: List<RecallAnswer> = emptyList(),
+    val recapMessage: String = "", val recapping: Boolean = false)
 
 class RecallRepository(private val context: Context) {
     val store = RecallStore(context)
@@ -23,6 +24,69 @@ class RecallRepository(private val context: Context) {
     private val _state=MutableStateFlow(RecallUiState(modelsReady=RecallModelFiles.ready(context)))
     val state=_state.asStateFlow()
     private var worker: Job? = null
+    private var recapWorker: Job? = null
+    private var recapRequest: Pair<Long,Long>? = null
+    private data class RecapCache(val signature: String, val answers: List<RecallAnswer>, val message: String)
+    private val recapCache=mutableMapOf<Long,RecapCache>()
+    private fun recapSources(start: Long, end: Long): List<RecallSegment> {
+        val ids=store.sessions().filter { it.start>=start && it.start<end }.map { it.id }.toSet()
+        return store.segments().filter { it.session in ids && it.text.isNotBlank() }
+    }
+    private fun recapSignature(sources: List<RecallSegment>) = sources.joinToString("|") { "${it.id}:${it.text}:${it.notes}" }
+    @Synchronized fun recap(start: Long, end: Long, force: Boolean = false) {
+        if(force) recapCache.remove(start)
+        recapRequest=start to end
+        val sources=recapSources(start,end);val signature=recapSignature(sources)
+        val cached=recapCache[start]?.takeIf { it.signature==signature }
+        if(cached!=null) {
+            _state.value=_state.value.copy(recap=cached.answers,recapMessage=cached.message,recapping=false);return
+        }
+        if(sources.isEmpty()) {
+            _state.value=_state.value.copy(recap=emptyList(),recapMessage="No processed speech for this day yet",recapping=false);return
+        }
+        if(_state.value.recording || _state.value.busy) {
+            _state.value=_state.value.copy(recap=emptyList(),recapMessage="Recap updates after Pause and queued speech processing",recapping=false);return
+        }
+        if(!RecallModelFiles.ready(context)) return
+        _state.value=_state.value.copy(recap=emptyList(),recapMessage="Updating recap across ${sources.map { it.session }.distinct().size} conversations",recapping=true)
+        if(recapWorker?.isActive==true) return
+        recapWorker=scope.launch {
+            try {
+                while(true) {
+                    val request=synchronized(this@RecallRepository) { recapRequest }?:break
+                    val input=recapSources(request.first,request.second);val version=recapSignature(input)
+                    val answers=mutableListOf<RecallAnswer>()
+                    // Yield between conversations so queued ASR and Ask can run.
+                    for(clips in input.groupBy { it.session }.values) {
+                        if(_state.value.recording || _state.value.busy) break
+                        inference.withLock {
+                            models.initialize()
+                            answers+=models.answer("Summarize the topics, decisions and actions actually discussed in this conversation for the daily recap. Describe talk as talk, not completed work.",clips)
+                        }
+                        yield()
+                    }
+                    val done=synchronized(this@RecallRepository) {
+                        val current=recapSignature(recapSources(request.first,request.second))
+                        if(current==version && !_state.value.recording && !_state.value.busy) {
+                            val message="${input.map { it.session }.distinct().size} conversations · ${input.size} transcript sources reviewed" +
+                                if(answers.isEmpty()) " · No supported recap returned" else " · Replay evidence to verify"
+                            recapCache[request.first]=RecapCache(version,answers,message)
+                            if(recapRequest==request) _state.value=_state.value.copy(recap=answers,recapMessage=message,recapping=false)
+                        }
+                        (recapRequest==request && current==version) || _state.value.recording || _state.value.busy
+                    }
+                    if(done) break
+                }
+            } catch(t: Exception) {
+                synchronized(this@RecallRepository) { _state.value=_state.value.copy(recap=emptyList(),recapMessage=t.message?:"Recap needs retry",recapping=false) }
+            } finally { synchronized(this@RecallRepository) { recapWorker=null;_state.value=_state.value.copy(recapping=false)
+                recapRequest?.let { request ->
+                    if(!_state.value.recording && !_state.value.busy && recapCache[request.first]?.signature!=recapSignature(recapSources(request.first,request.second)) && _state.value.recapMessage.startsWith("Updating"))
+                        recap(request.first,request.second)
+                }
+            } }
+        }
+    }
     init { refresh(); process() }
     @Synchronized fun refresh(message: String? = null, busy: Boolean? = null) {
         _state.value=_state.value.copy(sessions=store.sessions(),segments=store.segments(),
@@ -136,9 +200,8 @@ class RecallRepository(private val context: Context) {
         if(question.isBlank()) return@launch
         synchronized(this@RecallRepository) {
             if(_state.value.asking) return@launch
-            _state.value=_state.value.copy(answers=emptyList(),asking=true)
+            _state.value=_state.value.copy(answers=emptyList(),asking=true,askMessage="Finding source evidence")
         }
-        refresh("Finding the source",true)
         try {
             val answers=inference.withLock {
                 models.initialize()
@@ -148,9 +211,9 @@ class RecallRepository(private val context: Context) {
                     else store.search(models.embedding(question,true),session,allowed)
                 if(sources.isEmpty()) emptyList() else models.answer(question,sources)
             }
-            synchronized(this@RecallRepository) { _state.value=_state.value.copy(answers=answers) }
-            refresh(if(answers.isEmpty()) "Record a relevant conversation to find the answer" else "Answer with source evidence. Replay to verify.",false)
-        } catch(t: Exception) { refresh(t.message?:"Try your question again",false) }
+            synchronized(this@RecallRepository) { _state.value=_state.value.copy(answers=answers,
+                askMessage=if(answers.isEmpty()) "No supported answer found in the selected transcripts" else "Answer with source evidence. Replay to verify.") }
+        } catch(t: Exception) { synchronized(this@RecallRepository) { _state.value=_state.value.copy(askMessage=t.message?:"Try your question again") } }
         finally { synchronized(this@RecallRepository) { _state.value=_state.value.copy(asking=false) } }
     }
     fun rename(session: Long, title: String) = scope.launch { store.rename(session,title);refresh() }

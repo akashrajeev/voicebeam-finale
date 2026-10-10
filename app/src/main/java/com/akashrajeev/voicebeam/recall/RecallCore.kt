@@ -116,7 +116,7 @@ object RecallConversation {
     fun summaryQuestion(question: String): Boolean {
         val q=question.lowercase()
         return Regex("\\b(summar(?:y|ize|ise)|recap|overview|key points)\\b").containsMatchIn(q) ||
-            Regex("\\bwhat\\b.*\\b(talk|discuss|do|did|happen|cover|learn|say|said)\\b").containsMatchIn(q)
+            Regex("\\bwhat\\b.*\\b(talk|discuss|do|did|happen|cover|learn|say|said|speak(?:ing)?|spoke)\\b").containsMatchIn(q)
     }
     /** Honest fallback key points: unchanged source excerpts, not invented actions. */
     fun keyPoints(text: String): List<String> = text.split(Regex("(?<=[.!?।])\\s+|\\n+"))
@@ -124,4 +124,4 @@ object RecallConversation {
 }
 
 data class RecallCitation(val source: RecallSegment, val quote: String)
-data class RecallAnswer(val text: String, val citations: List<RecallCitation>, val generated: Boolean)
+data class RecallAnswer(val text: String, val citations: List<RecallCitation>, val generated: Boolean, val fallbackReason: String = "")

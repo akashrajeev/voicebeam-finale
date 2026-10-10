@@ -1,5 +1,5 @@
 name: recall-gemma-2026-10-10 validation and APK
-# RECALL-2.1: conversation transcript, cited generated answers and duration. Branch/artifacts only.
+# RECALL-2.2: all-conversation daily recap and clearer answer status. Branch/artifacts only.
 on:
   push:
     branches: [recall-gemma-2026-10-10]
@@ -78,11 +78,14 @@ jobs:
           assert roots and failures == 0
           print(f'{tests} JVM tests; {failures} failures/errors. Debug APK built. Phone test separate.')
           PY
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | head -1 | tee "$RUNNER_TEMP/recall-version.txt"
+          grep -F "versionCode='122' versionName='RECALL-2.2'" "$RUNNER_TEMP/recall-version.txt"
           sha256sum app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/VoiceBeam-RECALL-2.2.apk
       - name: Upload candidate APK
         uses: actions/upload-artifact@v4
         with:
-          name: recall-gemma-2026-10-10-${{ github.sha }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: VoiceBeam-RECALL-2.2-${{ github.sha }}
+          path: app/build/outputs/apk/debug/VoiceBeam-RECALL-2.2.apk
           retention-days: 1
           if-no-files-found: error

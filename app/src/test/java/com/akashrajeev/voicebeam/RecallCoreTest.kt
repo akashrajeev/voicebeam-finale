@@ -101,6 +101,9 @@ class RecallCoreTest {
         assertTrue(RecallConversation.summaryQuestion("so what did we do today tell me"))
         assertTrue(RecallConversation.summaryQuestion("summarize our conversation"))
         assertTrue(RecallConversation.summaryQuestion("What topics did we talk about?"))
+        assertTrue(RecallConversation.summaryQuestion("what did we speak about today"))
+        assertTrue(RecallConversation.summaryQuestion("what are we speaking about today"))
+        assertTrue(RecallConversation.summaryQuestion("what we spoke about today"))
         assertFalse(RecallConversation.summaryQuestion("When is the train?"))
     }
     @Test fun fallbackPointsAreSourceSubstringsNotInventedActions() {

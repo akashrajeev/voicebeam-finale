@@ -10,3 +10,8 @@ Install over RECALL-2. Do not uninstall: same stable signer, SQLite v3 to v4 mig
 - Silence/crowd/repeated-loop guards unchanged; speech detection is not intended-speaker selection or a truth detector.
 - No fixed session cap; Android/process interruption, available storage, battery and heat still limit continuous recording. Duration is captured-sample time, not processing time.
 - Listen DSP untouched. Phone speed, sustained throughput, long-session layout and semantic answer quality need testing. Emulator cannot launch on the current host (insufficient RAM).
+
+## RECALL-2.2
+- Install over 2.1: versionCode 122, versionName RECALL-2.2, visible in Recall header. APK inside ZIP is VoiceBeam-RECALL-2.2.apk to avoid selecting an older app-debug.apk. CI asserts embedded APK version and signer.
+- Daily recap replaces the oldest-first six-extract display. Each conversation from the selected day is summarized with validated source citations. Recomputes after Pause and queued transcription; changed sources clear stale results. Cache is in-memory only: reopening after process restart regenerates. No daily generation while actively capturing; use Pause to update. Long days can take time and produce several statements per conversation.
+- Ask status no longer leaks into Home. Extract fallback explains invalid JSON/no answer/failed evidence checks. Speak/spoke questions select broad summary handling.

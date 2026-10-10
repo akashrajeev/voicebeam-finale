@@ -58,6 +58,9 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
     val dayEnd=(day.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR,1) }.timeInMillis
     val visibleSessions=state.sessions.filter { it.start>=dayStart && it.start<dayEnd }
     val daySegments=state.segments.filter { clip -> visibleSessions.any { it.id==clip.session } }
+    LaunchedEffect(dayStart,dayEnd,daySegments.map { Triple(it.id,it.text,it.notes) },state.busy,state.recording) {
+        repo.recap(dayStart,dayEnd)
+    }
     var modelSpec by remember { mutableStateOf(RecallModelFiles.gemma) }
     val player=remember { MediaPlayer() }
     var playbackError by remember { mutableStateOf("") }
@@ -98,7 +101,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal=20.dp),verticalArrangement=Arrangement.spacedBy(14.dp),contentPadding=PaddingValues(top=20.dp,bottom=24.dp)) {
             item {
                 if(page!="home") TextButton(onClick={page="home";selected=null}) { Text("‹ Your day",color=Mint) }
-                Text("VOICEBEAM",color=Color(0xFF9FB4AE),fontSize=12.sp,letterSpacing=2.sp)
+                Text("VOICEBEAM · ${com.akashrajeev.voicebeam.BuildConfig.VERSION_NAME}",color=Color(0xFF9FB4AE),fontSize=12.sp,letterSpacing=2.sp)
                 Text(when(page) { "ask"->"Ask your day";"manage"->"Local models & privacy";"detail"->state.sessions.find { it.id==selected }?.title?:"Conversation notes";else->"Recall" },
                     color=Sand,fontSize=32.sp,fontWeight=FontWeight.Bold)
                 Text(if(page=="ask") "Answers with the moment behind them." else "Your conversations, remembered.",color=Color(0xFF9FB4AE),fontSize=14.sp)
@@ -142,13 +145,19 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                 }
                 item {
                     Text("Stored on this phone",color=Color(0xFF8AABA0),fontSize=12.sp)
-                    val recap=daySegments.flatMap { clip ->
-                        val notes=runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray())
-                        (0 until notes.length()).map { notes.getJSONObject(it).optString("quote") }
-                    }.filter { it.isNotBlank() }.distinct().take(6)
-                    if(recap.isNotEmpty()) RecallPanel {
-                        Text("DAILY RECAP · SOURCE EXTRACTS",color=Mint,fontSize=12.sp)
-                        recap.forEach { Text(it,color=Sand) }
+                    RecallPanel {
+                        Text("DAILY RECAP",color=Mint,fontSize=12.sp)
+                        Text(state.recapMessage,color=Color(0xFFACC6BD),fontSize=12.sp)
+                        if(state.recapping) LinearProgressIndicator(Modifier.fillMaxWidth(),color=Mint)
+                        state.recap.forEach { answer ->
+                            Text(answer.text,color=Sand)
+                            Text(if(answer.generated) "Generated summary" else answer.fallbackReason.ifBlank { "Source extract fallback" },color=Mint,fontSize=11.sp)
+                            answer.citations.forEach { citation ->
+                                Text(citation.quote,color=Color(0xFFACC6BD),fontSize=12.sp)
+                                TextButton(onClick={replay(citation.source)}) { Text("▶ ${time(state.sessions.find { it.id==citation.source.session }?.start?:0L)} · source ${citation.source.id}") }
+                            }
+                        }
+                        if(!state.recapping) TextButton(onClick={repo.recap(dayStart,dayEnd,true)}) { Text("Update recap") }
                     }
                     if(state.segments.any { it.status in listOf("retry","needs_index","review") }) TextButton(onClick={repo.retry()}) { Text("Retry processing") }
                     if(state.recording && state.segments.any { it.text.isNotBlank() }) {
@@ -247,6 +256,8 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
             }
             if(page=="ask") {
                 item {
+                    if(state.askMessage.isNotBlank()) Text(state.askMessage,color=Mint,fontSize=12.sp)
+                    if(state.asking) LinearProgressIndicator(Modifier.fillMaxWidth(),color=Mint)
                     OutlinedTextField(question,{question=it},label={Text("Ask a question")},modifier=Modifier.fillMaxWidth())
                     Button(onClick={repo.ask(question,selected,if(selected==null) dayStart else null,if(selected==null) dayEnd else null)},enabled=state.modelsReady&&!state.asking&&question.isNotBlank()) { Text("Find answer") }
                     Text(if(selected==null) "${if(dayOffset==0) "Today" else "Yesterday"} conversations" else "This conversation",color=Mint,fontSize=12.sp)
@@ -254,6 +265,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                 items(state.answers) { answer -> RecallPanel {
                     Text(answer.text,color=Sand,fontSize=20.sp)
                     Text(if(answer.generated) "Generated from transcript · verify evidence below" else "Transcript extract · generation unavailable",color=Mint,fontSize=12.sp)
+                    if(answer.fallbackReason.isNotBlank()) Text(answer.fallbackReason,color=Color(0xFFACC6BD),fontSize=12.sp)
                     answer.citations.forEach { citation ->
                         Text("Source ${citation.source.id}: ${citation.quote}",color=Color(0xFFACC6BD),fontSize=13.sp)
                         TextButton(onClick={replay(citation.source)}) { Text("▶ ${RecallConversation.clock(citation.source.start)} · Replay source ${citation.source.id}") }
