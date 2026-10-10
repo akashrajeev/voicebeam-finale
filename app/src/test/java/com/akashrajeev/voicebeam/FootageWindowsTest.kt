@@ -51,4 +51,20 @@ class FootageWindowsTest {
     @Test(expected = IllegalArgumentException::class) fun othersOffInfiniteThresholdRejected() {
         FootageWindows.othersOff(listOf(floatArrayOf(0.1f)), Float.POSITIVE_INFINITY)
     }
+
+    @Test fun ineligibleWindowsAbstainWithoutEmbedding() {
+        var calls = 0
+        val w = FootageWindows.embedWindows(FloatArray(16000 * 4), embed = { calls++; floatArrayOf(1f) }, eligible = { a, _ -> a >= 16000 })!!
+        // 4 s at 16 kHz, 1.5 s window, 0.5 s hop: (64000-24000)/8000+1 = 6 windows starting at 0, 0.5, 1.0, 1.5, 2.0, 2.5 s
+        assertEquals(6, w.size)
+        // eligible = start >= 16000 samples (1.0 s): windows 2..5 -> 4 embed calls; windows 0 and 1 abstain
+        assertNull(w[0].emb); assertNull(w[1].emb); assertNotNull(w[2].emb); assertNotNull(w[5].emb)
+        assertEquals(4, calls)
+    }
+    @Test fun speechCoverageFraction() {
+        val flags = BooleanArray(100) { it < 50 }
+        assertEquals(1f, FootageWindows.speechCoverage(flags, 0, 512 * 10), 1e-6f)
+        assertEquals(0f, FootageWindows.speechCoverage(flags, 512 * 60, 512 * 70), 1e-6f)
+        assertEquals(0.5f, FootageWindows.speechCoverage(flags, 512 * 45, 512 * 55), 1e-6f)
+    }
 }
