@@ -63,7 +63,7 @@ jobs:
           disable-animations: true
           script: |
             trap 'adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/offset-evidence offset-evidence || true; adb logcat -d -s OffsetEvidence:I > offset-evidence-log.txt || true' EXIT
-            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.OfflineVideoRoundTripTest,com.akashrajeev.voicebeam.FootageImportRoundTripTest#importPreservesOriginalAndExportsSynchronizedVideo,com.akashrajeev.voicebeam.FootageImportRoundTripTest#cancelBeforeExtractionDoesNotWriteOutput -Dorg.gradle.jvmargs="-Xmx3g"
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.UnifiedNavigationUiTest,com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.OfflineVideoRoundTripTest,com.akashrajeev.voicebeam.FootageImportRoundTripTest#importPreservesOriginalAndExportsSynchronizedVideo,com.akashrajeev.voicebeam.FootageImportRoundTripTest#cancelBeforeExtractionDoesNotWriteOutput -Dorg.gradle.jvmargs="-Xmx3g"
             adb logcat -d -s OfflineGuard:I TseTest:I FootageNative:I OfflineFootageGuard:I > offline-extractor-log.txt
             cat offline-extractor-log.txt
             ./gradlew --no-daemon installDebug installDebugAndroidTest -Dorg.gradle.jvmargs="-Xmx3g"
@@ -71,6 +71,7 @@ jobs:
             grep -q '^OK (2 tests)' offline-ui-instrument.txt
             adb logcat -d -s TseTest:I > offline-extractor-log.txt
             adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/offline-custom-video.png ci-offline-ui.png
+            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/unified-video-navigation.png ci-unified-nav.png
       - name: Remove temporary signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/recall.p12"
@@ -83,6 +84,7 @@ jobs:
             app/build/reports/
             app/build/outputs/androidTest-results/
             ci-offline-ui.png
+            ci-unified-nav.png
             offline-extractor-log.txt
             offset-evidence/
             offset-evidence-log.txt
