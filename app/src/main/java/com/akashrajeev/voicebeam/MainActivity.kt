@@ -25,7 +25,7 @@ import com.akashrajeev.voicebeam.ui.SettingsScreen
 import com.akashrajeev.voicebeam.ui.SetupScreen
 import com.akashrajeev.voicebeam.ui.VoiceBeamTheme
 
-enum class Screen { SETUP, FOCUS, CAPTIONS, SESSIONS, SETTINGS }
+enum class Screen { SETUP, FOCUS, CAPTIONS, SESSIONS, SETTINGS, RECALL }
 
 class MainActivity : ComponentActivity() {
     private val engine: VoiceBeamEngine get() = (application as VoiceBeamApp).engine
@@ -70,6 +70,13 @@ fun App(engine: VoiceBeamEngine, permsGranted: Boolean, requestPerms: () -> Unit
     var screen by rememberSaveable { mutableStateOf(if (settings.onboarded && permsGranted) Screen.FOCUS else Screen.SETUP) }
     LaunchedEffect(permsGranted) { if (!permsGranted) screen = Screen.SETUP }
     BackHandler(enabled = screen != Screen.SETUP && screen != Screen.FOCUS) { screen = Screen.FOCUS }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(screen) {
+        if(screen == Screen.FOCUS || screen == Screen.CAPTIONS) {
+            val recall = (context.applicationContext as VoiceBeamApp).recall
+            if(recall.state.value.recording) context.startService(android.content.Intent(context, com.akashrajeev.voicebeam.recall.RecallRecorderService::class.java).setAction(com.akashrajeev.voicebeam.recall.RecallRecorderService.STOP))
+        }
+    }
     when (screen) {
         Screen.SETUP -> SetupScreen(engine, permsGranted, requestPerms) {
             engine.updateSettings { it.copy(onboarded = true) }
@@ -81,6 +88,7 @@ fun App(engine: VoiceBeamEngine, permsGranted: Boolean, requestPerms: () -> Unit
             if (screen == Screen.CAPTIONS) CaptionScreen(engine) { screen = Screen.FOCUS }
         }
         Screen.SESSIONS -> SessionsScreen(engine, onNavigate = { screen = it })
+        Screen.RECALL -> com.akashrajeev.voicebeam.recall.RecallScreen(onNavigate = { screen = it })
         Screen.SETTINGS -> SettingsScreen(engine, onNavigate = { screen = it })
     }
 }
