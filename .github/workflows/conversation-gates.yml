@@ -31,7 +31,7 @@ jobs:
           name: phone-conversation-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 1
-      - name: Offline native extraction and UI
+      - name: Native identity and composed UI capture
         uses: reactivecircus/android-emulator-runner@v2
         env:
           VB_EMULATOR: '1'
