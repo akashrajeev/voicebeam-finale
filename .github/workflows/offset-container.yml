@@ -1,4 +1,5 @@
 name: Offset edit-list decoder diagnostic
+# Observe decode before requiring preserved container offset
 on:
   push:
     branches: [exp-13-recall-gemma]
