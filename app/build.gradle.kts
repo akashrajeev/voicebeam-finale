@@ -20,8 +20,8 @@ android {
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 123
-        versionName = "RECALL-2.3"
+        versionCode = 124
+        versionName = "RECALL-FOOTAGE-1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
@@ -82,6 +82,7 @@ android {
 dependencies {
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
     implementation(files("libs/sherpa-onnx.aar"))
+    implementation(files("libs/onnxruntime-java-jni.aar"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
