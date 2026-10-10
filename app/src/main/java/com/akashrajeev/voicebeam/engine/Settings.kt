@@ -4,6 +4,7 @@ import android.content.Context
 
 data class Settings(
     val strictFocus: Boolean = true,
+    val strictFull: Boolean = true,
     val strictResidual: Float = .2f,
     val strictHangoverMs: Float = 700f,
     val targetMatchThreshold: Float = .8f,
@@ -28,6 +29,7 @@ class SettingsStore(context: Context) {
 
     fun load(): Settings = Settings(
         strictFocus = p.getBoolean("strictFocus", true),
+        strictFull = p.getBoolean("strictFull", true),
         strictResidual = p.getFloat("strictResidual", .2f),
         strictHangoverMs = p.getFloat("strictHangoverMs", 700f),
         targetMatchThreshold = p.getFloat("targetMatchThreshold", .8f),
@@ -49,7 +51,7 @@ class SettingsStore(context: Context) {
 
     fun save(s: Settings) {
         p.edit()
-            .putBoolean("strictFocus", s.strictFocus).putFloat("strictResidual", s.strictResidual)
+            .putBoolean("strictFull", s.strictFull).putBoolean("strictFocus", s.strictFocus).putFloat("strictResidual", s.strictResidual)
             .putFloat("strictHangoverMs", s.strictHangoverMs).putFloat("targetMatchThreshold", s.targetMatchThreshold)
             .putBoolean("matcherDenoised", s.matcherDenoised)
             .putFloat("quiet", s.quietOthers).putFloat("boost", s.boostDb).putFloat("denoise", s.denoise)
