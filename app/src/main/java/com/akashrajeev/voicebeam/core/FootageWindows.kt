@@ -57,6 +57,7 @@ object FootageWindows {
 
     /** Others-off evidence: true only where the OTHER tracked faces all have DATA and are below offThreshold. NaN is unknown, not off. */
     fun othersOff(otherBinned: List<FloatArray>, offThreshold: Float): BooleanArray? {
+        require(offThreshold.isFinite()) { "bad threshold" }
         if (otherBinned.isEmpty()) return null
         val n = otherBinned[0].size
         require(otherBinned.all { it.size == n }) { "series length mismatch" }
