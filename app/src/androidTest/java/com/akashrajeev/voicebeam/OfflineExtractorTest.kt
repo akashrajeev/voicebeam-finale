@@ -57,4 +57,11 @@ class OfflineExtractorTest {
         catch(_:IllegalArgumentException){}
         assertFalse(out.exists());assertTrue(raw.exists());raw.delete()
     }
+    @Test fun properVadAndReferenceQuality() {
+        val ref=fixture("1089-134686-0013.wav").take(48000).toFloatArray()
+        assertTrue(com.akashrajeev.voicebeam.separation.OfflineQualityGuard.reference(context,ref))
+        assertFalse(com.akashrajeev.voicebeam.separation.OfflineQualityGuard.reference(context,FloatArray(48000)))
+        assertTrue(com.akashrajeev.voicebeam.separation.OfflineSpeechMask.compute(context,FloatArray(16000)).none{it})
+    }
+
 }
