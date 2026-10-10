@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.test.platform.app.InstrumentationRegistry
 import com.akashrajeev.voicebeam.ui.BottomNav
+import com.akashrajeev.voicebeam.ui.StereoProbePanel
 import com.akashrajeev.voicebeam.ui.SessionsScreen
 import com.akashrajeev.voicebeam.ui.VoiceBeamTheme
 import org.junit.Assert.assertEquals
@@ -14,6 +15,13 @@ import java.io.File
 
 class UnifiedNavigationUiTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun stereoProbeBlockedWhileBusy() {
+        compose.setContent { VoiceBeamTheme { StereoProbePanel(false) } }
+        compose.onNodeWithTag("runStereoProbe").assertIsNotEnabled()
+        compose.onNodeWithText("Stop Listen/Recall recording and wait for processing before testing.").assertExists()
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.getExternalFilesDir(null),"stereo-probe-panel.png").outputStream().use { stream -> compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG,100,stream) }
+    }
     @Test fun videoTabRoutesToSessions() {
         var destination: Screen? = null
         compose.setContent { VoiceBeamTheme { BottomNav(Screen.RECALL) { destination=it } } }
