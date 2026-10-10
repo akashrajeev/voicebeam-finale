@@ -65,3 +65,7 @@ echo "6851db68df3122356772b70e1471cfccfc832fcd6eddb23bc39d5673381e9f72  app/src/
 echo "4d22ebf856da6bd68946c2b5fd926ccee05bf49fe2ade805c4b057e1c191ad8a  app/src/main/assets/enhfixtures/1089-134686-0013.wav" | sha256sum -c -
 [ -s app/src/main/assets/enhfixtures/ATTRIBUTION.txt ] || curl -fL -o app/src/main/assets/enhfixtures/ATTRIBUTION.txt https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/ATTRIBUTION.txt
 echo "0217bda8c2281be7a419ed52cf19888de32a68a4a46c7b672b01fb8e7c63ff3d  app/src/main/assets/enhfixtures/ATTRIBUTION.txt" | sha256sum -c -
+
+# Pinned offline DPDFNet2 analysis front end, bundled for offline use.
+[ -f "$ASSETS/dpdfnet2.onnx" ] || curl -fL -o "$ASSETS/dpdfnet2.onnx" "$REL/speech-enhancement-models/dpdfnet2.onnx"
+printf '%s\n' 'ce35d6025fc71df0ef10d1540e1b7916837bbfe5f6896deb744508d2cad487a9  app/src/main/assets/models/dpdfnet2.onnx' | sha256sum -c -
