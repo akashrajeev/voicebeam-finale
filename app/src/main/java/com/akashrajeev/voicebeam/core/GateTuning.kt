@@ -8,6 +8,7 @@ data class GateTuning(
     val targetThreshold: Float = .8f,
     val releaseMs: Float = 250f,
     val strictFull: Boolean = false,
+    val conversationCandidate: Boolean = false,
 ) {
     fun sanitized() = copy(
         residualGain = if (residualGain.isFinite()) residualGain.coerceIn(.02f, 1f) else .2f,
