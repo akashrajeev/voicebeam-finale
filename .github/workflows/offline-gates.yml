@@ -1,4 +1,4 @@
-name: Offline video candidate guard diagnostics v5
+name: Offline video candidate reference gate v6
 on:
   push:
     branches: [experiment-10]
