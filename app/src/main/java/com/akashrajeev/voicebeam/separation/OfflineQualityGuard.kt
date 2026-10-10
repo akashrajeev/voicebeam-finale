@@ -39,7 +39,8 @@ object OfflineQualityGuard {
             sourceScore/=count;outputScore/=count
             // Mixed-speaker inputs need not resemble the reference; homogeneous inputs must not lose it.
             android.util.Log.i("OfflineGuard", "sourceCosine=$sourceScore outputCosine=$outputScore chunks=$count")
-            return outputScore>=.4f && !(sourceScore>=.6f && outputScore<sourceScore-.15f)
+            // Recalibrated (was .4/.6/.15) on a 10-case laptop TitaNet-small distribution; data-thin, revisit with device renders.
+            return outputScore>=.35f && !(sourceScore>=.6f && outputScore<sourceScore-.45f)
         } finally {embed.release()}
     }
 }
