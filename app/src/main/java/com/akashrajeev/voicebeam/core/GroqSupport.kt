@@ -17,6 +17,13 @@ object GroqKey {
         if (!k.all { it.isLetterOrDigit() || it == '_' || it == '-' }) return null
         return k
     }
+    private val tokenPattern = Regex("gsk_[A-Za-z0-9_-]{20,190}")
+    /** Key from shared text: the first gsk_ token inside it, or the whole text when it is just a key. */
+    fun extract(text: String?): String? {
+        if (text == null) return null
+        val m = tokenPattern.find(text)
+        return if (m != null) parse(m.value) else parse(text)
+    }
     fun load(dirs: List<File?>): String? {
         for (d in dirs) {
             if (d == null) continue

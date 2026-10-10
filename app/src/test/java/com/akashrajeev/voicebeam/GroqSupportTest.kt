@@ -21,6 +21,12 @@ class GroqSupportTest {
         assertNull(GroqKey.parse("gsk_" + "a".repeat(300)))
         assertNull(GroqKey.parse("gsk_" + "a".repeat(30) + "\r\nX-Evil: 1"))
     }
+    @Test fun keyExtractFindsTokenInsideSharedText() {
+        assertEquals(goodKey, GroqKey.extract("my key: " + goodKey + " thanks"))
+        assertEquals(goodKey, GroqKey.extract(goodKey))
+        assertNull(GroqKey.extract("no key here"))
+        assertNull(GroqKey.extract(null))
+    }
     @Test fun keyLoadReadsPrivateFileOrReturnsNull() {
         val dir = kotlin.io.path.createTempDirectory().toFile()
         try {
