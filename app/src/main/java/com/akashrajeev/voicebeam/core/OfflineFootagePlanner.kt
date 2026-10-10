@@ -1,6 +1,6 @@
 package com.akashrajeev.voicebeam.core
 
-enum class AbstainReason { NO_CLUSTER, SINGLE_CLUSTER, TAP_REQUIRED, TAP_NOT_IN_CLUSTER, REFERENCE_TOO_SHORT, LIP_AMBIGUOUS, GUARD_REJECTED, PLAN_UNSTABLE }
+enum class AbstainReason { NO_CLUSTER, SINGLE_CLUSTER, TAP_REQUIRED, TAP_NOT_IN_CLUSTER, REFERENCE_TOO_SHORT, LIP_AMBIGUOUS, GUARD_REJECTED, PLAN_UNSTABLE, EVIDENCE_CONTRADICTS_PLAN }
 enum class TargetSource { TAP, FACE }
 
 sealed class PlanResult {
@@ -27,16 +27,26 @@ object OfflineFootagePlanner {
      */
     const val MIN_PLAN_STABILITY = 0.88f
     private val PERTURB_MERGE_COS = floatArrayOf(0.40f, 0.50f, 0.55f)
+    /**
+     * The pin is a property of the embedding pipeline. RAW embeddings: pin 0.45, set {0.40,0.50,0.55} (the proven behaviour, unchanged default).
+     * DENOISED embeddings have different geometry: pin 0.41, set {0.39,0.43} (eval's full-chain table; PROVISIONAL, small sample).
+     */
+    const val DENOISED_MERGE_COS = 0.41f
+    private val DENOISED_PERTURB_MERGE_COS = floatArrayOf(0.39f, 0.43f)
+    data class MergeProfile(val pin: Float, val perturb: FloatArray) {
+        companion object { val RAW = MergeProfile(FootageAnalysis.DEFAULT_MERGE_COS, PERTURB_MERGE_COS); val DENOISED = MergeProfile(DENOISED_MERGE_COS, DENOISED_PERTURB_MERGE_COS) }
+    }
 
     fun plan(
         ws: List<WindowEmbedding>, durationSec: Float,
         tap: FootageAnalysis.Interval? = null,
         lipBinned: FloatArray? = null, otherLipBinned: List<FloatArray> = emptyList(),
-        lipOnThreshold: Float = 0.5f, othersOffThreshold: Float = 0.3f
+        lipOnThreshold: Float = 0.5f, othersOffThreshold: Float = 0.3f,
+        profile: MergeProfile = MergeProfile.RAW
     ): PlanResult {
         // Tap validation runs BEFORE any abstain so a malformed tap is always a caller error, never masked by NO_CLUSTER.
         if (tap != null) require(tap.startSec.isFinite() && tap.endSec.isFinite() && tap.startSec >= 0f && tap.endSec > tap.startSec && tap.endSec <= durationSec) { "tap outside audio" }
-        val ca = ClusteredAnalysis.of(ws, durationSec)
+        val ca = ClusteredAnalysis.of(ws, durationSec, profile.pin)
         if (ca.clusterCount == 0) return PlanResult.Abstain(AbstainReason.NO_CLUSTER)
 
         if (tap != null) {
@@ -53,8 +63,8 @@ object OfflineFootagePlanner {
             if (best.value.toFloat() / inside.size < MIN_TAP_SHARE) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
             // Routed render needs other speakers to separate from; one cluster gives no such evidence.
             if (ca.clusterCount < 2) return PlanResult.Abstain(AbstainReason.SINGLE_CLUSTER)
-            val base = roles(ws, durationSec, tap, FootageAnalysis.DEFAULT_MERGE_COS)
-            for (pm in PERTURB_MERGE_COS) {
+            val base = roles(ws, durationSec, tap, profile.pin)
+            for (pm in profile.perturb) {
                 val r = roles(ws, durationSec, tap, pm)
                 val agree = if (base == null || r == null) 0f else base.indices.count { base[it] == r[it] }.toFloat() / base.size
                 if (agree < MIN_PLAN_STABILITY) return PlanResult.Abstain(AbstainReason.PLAN_UNSTABLE)
