@@ -5,6 +5,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.SystemClock
 import com.akashrajeev.voicebeam.core.AudioAlignment
+import com.akashrajeev.voicebeam.core.Mp4TrackStarts
 import java.io.File
 import java.nio.ByteOrder
 
@@ -32,7 +33,8 @@ object VideoAudioDecoder {
             val audioStart = ex.sampleTime
             require(videoStart >= 0 && audioStart >= 0) { "Choose a video with an audio track" }
             // Phone recordings often start audio a little after video. ALIGN (pad or trim) instead of rejecting; only a >2 s offset is treated as broken.
-            val offsetUs = audioStart - videoStart
+            val edits = Mp4TrackStarts.read(file)
+            val offsetUs = Mp4TrackStarts.effective(audioStart, edits.audioUs) - Mp4TrackStarts.effective(videoStart, edits.videoUs)
             AudioAlignment.leadingSamples(offsetUs, 16000) // throws the old "offset is unsupported" message beyond the cap
             val format = ex.getTrackFormat(audio)
             val decoder = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
