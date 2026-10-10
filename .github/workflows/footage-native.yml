@@ -1,4 +1,4 @@
-name: Footage delivery native gates - demo rev q - offset test Unit fix
+name: Footage delivery native gates - offset evidence diagnostic only
 on:
   push:
     branches: [experiment-12]
@@ -40,6 +40,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: |
+            trap 'adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/offset-evidence offset-evidence || true; adb logcat -d -s OffsetEvidence:I > offset-evidence-log.txt || true' EXIT
             ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.OfflineVideoRoundTripTest,com.akashrajeev.voicebeam.FootageImportRoundTripTest -Dorg.gradle.jvmargs="-Xmx3g"
             adb logcat -d -s OfflineGuard:I TseTest:I FootageNative:I OfflineFootageGuard:I > offline-extractor-log.txt
             cat offline-extractor-log.txt
@@ -61,4 +62,6 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk
             ci-offline-ui.png
             offline-extractor-log.txt
+            offset-evidence/
+            offset-evidence-log.txt
           retention-days: 1
