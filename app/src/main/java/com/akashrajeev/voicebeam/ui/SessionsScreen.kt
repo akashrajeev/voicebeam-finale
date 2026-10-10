@@ -86,7 +86,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
 
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.weight(1f).statusBarsPadding().padding(horizontal = 18.dp)) {
-            Text("Sessions", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
+            Text("Video & sessions", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
             OfflineVideoPanel(allowed = com.akashrajeev.voicebeam.core.OfflineImportGate.allowed(recallState.recording,recallState.busy,recallState.asking,recallState.recapping,live.listening,live.recording.active,live.recording.exporting), onBusy = { offlineBusy = it }, onImported = { engine.refreshSessions() })
             if (list.isEmpty()) {
                 Text("No recordings yet. On the Focus screen, lock onto a face and press the red button.", color = Muted)
