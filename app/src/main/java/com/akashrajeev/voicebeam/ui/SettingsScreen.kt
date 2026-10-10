@@ -53,6 +53,8 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     }
     val s by engine.settings.collectAsState()
     val state by engine.state.collectAsState()
+    val recall by (context.applicationContext as com.akashrajeev.voicebeam.VoiceBeamApp).recall.state.collectAsState()
+    var probeBusy by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.weight(1f).statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             Text("Settings", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
@@ -118,6 +120,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                 }) { Text("Clear key") }
             }
             if (keyMessage.isNotEmpty()) Text(keyMessage, color = Muted, fontSize = 12.sp)
+            StereoProbePanel(com.akashrajeev.voicebeam.core.OfflineImportGate.allowed(recall.recording,recall.busy,recall.asking,recall.recapping,state.listening,state.recording.active,state.recording.exporting),onBusy={probeBusy=it})
             SectionHeader("Live diagnostics")
             Text("Local technical logs only. No audio, captions or uploads. Share sends a text file only when you choose an app.", color = Muted, fontSize = 12.sp)
             Row {
@@ -142,7 +145,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
             ValueRow("Version", BuildConfig.VERSION_NAME)
         }
-        BottomNav(Screen.SETTINGS, onNavigate)
+        if(!probeBusy) BottomNav(Screen.SETTINGS, onNavigate)
     }
 }
 
