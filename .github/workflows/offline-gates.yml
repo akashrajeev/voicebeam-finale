@@ -1,5 +1,8 @@
 name: Offline video candidate gates
 on:
+  push:
+    branches: [experiment-10]
+    paths: ['.github/workflows/offline-gates.yml']
   workflow_dispatch:
 permissions:
   contents: read
