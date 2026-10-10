@@ -1,6 +1,6 @@
 package com.akashrajeev.voicebeam.core
 
-enum class AbstainReason { NO_CLUSTER, SINGLE_CLUSTER, TAP_REQUIRED, TAP_NOT_IN_CLUSTER, REFERENCE_TOO_SHORT, LIP_AMBIGUOUS, GUARD_REJECTED }
+enum class AbstainReason { NO_CLUSTER, SINGLE_CLUSTER, TAP_REQUIRED, TAP_NOT_IN_CLUSTER, REFERENCE_TOO_SHORT, LIP_AMBIGUOUS, GUARD_REJECTED, PLAN_UNSTABLE }
 enum class TargetSource { TAP, FACE }
 
 sealed class PlanResult {
@@ -20,6 +20,13 @@ object OfflineFootagePlanner {
     const val MIN_TAP_SHARE = 0.5f
     /** Winner must beat the runner-up by at least this share of the windows inside the tap; ties or near-ties abstain. */
     const val MIN_TAP_MARGIN = 0.2f
+    /**
+     * Plan-stability gate: a CONSISTENCY (threshold-sensitivity) check only, not proof of correct identity. A consistently wrong identity can be stable across mergeCos values; FinalAudioGuard remains the real backstop.
+     * The window roles (target / other / abstained) must agree with the roles at mergeCos 0.4, 0.45 and 0.55 for at least this
+     * fraction of windows. Calibration (5 embedding fixtures): good plans min 0.93/1.00/0.94, mislabelled plans 0.82/0.73. PROVISIONAL, tiny sample.
+     */
+    const val MIN_PLAN_STABILITY = 0.88f
+    private val PERTURB_MERGE_COS = floatArrayOf(0.4f, 0.45f, 0.55f)
 
     fun plan(
         ws: List<WindowEmbedding>, durationSec: Float,
@@ -46,6 +53,12 @@ object OfflineFootagePlanner {
             if (best.value.toFloat() / inside.size < MIN_TAP_SHARE) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
             // Routed render needs other speakers to separate from; one cluster gives no such evidence.
             if (ca.clusterCount < 2) return PlanResult.Abstain(AbstainReason.SINGLE_CLUSTER)
+            val base = roles(ws, durationSec, tap, 0.5f)
+            for (pm in PERTURB_MERGE_COS) {
+                val r = roles(ws, durationSec, tap, pm)
+                val agree = if (base == null || r == null) 0f else base.indices.count { base[it] == r[it] }.toFloat() / base.size
+                if (agree < MIN_PLAN_STABILITY) return PlanResult.Abstain(AbstainReason.PLAN_UNSTABLE)
+            }
             return finish(ca, best.key, TargetSource.TAP, listOf(tap))
         }
 
@@ -56,6 +69,22 @@ object OfflineFootagePlanner {
         val ref = ta.autoReference(lipOn = FootageWindows.lipOn(lipBinned, lipOnThreshold), othersOffLip = othersOff)
         if (ref == null) return PlanResult.Abstain(if (ca.clusterCount < 2 && othersOff == null) AbstainReason.SINGLE_CLUSTER else AbstainReason.REFERENCE_TOO_SHORT)
         return PlanResult.Plan(asg.cluster, ca.clusterCount, TargetSource.FACE, ref, ta.labels, ta.purity)
+    }
+
+    /** Window roles under a perturbed clustering: 0 = abstained, 1 = target cluster (chosen from the same tap), 2 = other. Null if no safe target. */
+    private fun roles(ws: List<WindowEmbedding>, durationSec: Float, tap: FootageAnalysis.Interval, mergeCos: Float): IntArray? {
+        val ca = ClusteredAnalysis.of(ws, durationSec, mergeCos)
+        if (ca.clusterCount < 2) return null
+        val clusters = ca.windowClusters()
+        val inside = ws.indices.filter { ws[it].startSec >= tap.startSec && ws[it].endSec <= tap.endSec }
+        val valid = inside.filter { clusters[it] >= 0 }
+        if (inside.size < MIN_TAP_WINDOWS || valid.size < MIN_TAP_WINDOWS) return null
+        val ranked = valid.groupingBy { clusters[it] }.eachCount().entries.sortedByDescending { it.value }
+        val runnerUp = if (ranked.size > 1) ranked[1].value else 0
+        if ((ranked[0].value - runnerUp).toFloat() / inside.size < MIN_TAP_MARGIN) return null
+        if (ranked[0].value.toFloat() / inside.size < MIN_TAP_SHARE) return null
+        val target = ranked[0].key
+        return IntArray(ws.size) { if (clusters[it] < 0) 0 else if (clusters[it] == target) 1 else 2 }
     }
 
     private fun finish(ca: ClusteredAnalysis, target: Int, src: TargetSource, ref: List<FootageAnalysis.Interval>): PlanResult {
