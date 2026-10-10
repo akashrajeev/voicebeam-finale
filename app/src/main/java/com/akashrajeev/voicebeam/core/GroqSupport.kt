@@ -24,6 +24,19 @@ object GroqKey {
         val m = tokenPattern.find(text)
         return if (m != null) parse(m.value) else parse(text)
     }
+    /** Stores the key in app-private storage. False when the text holds no valid key. */
+    fun save(dir: File, raw: String?): Boolean {
+        val key = extract(raw) ?: return false
+        return try {
+            val tmp = File(dir, FILE_NAME + ".tmp")
+            tmp.writeText(key)
+            val dest = File(dir, FILE_NAME)
+            tmp.renameTo(dest) || (dest.delete() && tmp.renameTo(dest))
+        } catch (_: Throwable) { false }
+    }
+    fun clear(dirs: List<File?>) {
+        for (d in dirs) { if (d == null) continue; try { File(d, FILE_NAME).delete() } catch (_: Throwable) {} }
+    }
     fun load(dirs: List<File?>): String? {
         for (d in dirs) {
             if (d == null) continue

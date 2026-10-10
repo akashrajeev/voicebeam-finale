@@ -27,6 +27,20 @@ class GroqSupportTest {
         assertNull(GroqKey.extract("no key here"))
         assertNull(GroqKey.extract(null))
     }
+    @Test fun keySaveAndClearRoundTrip() {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        try {
+            assertFalse(GroqKey.save(dir, "not a key"))
+            assertNull(GroqKey.load(listOf(dir)))
+            assertTrue(GroqKey.save(dir, "  " + goodKey + "\n"))
+            assertEquals(goodKey, GroqKey.load(listOf(dir)))
+            val other = "gsk_" + "b".repeat(40)
+            assertTrue(GroqKey.save(dir, other))
+            assertEquals(other, GroqKey.load(listOf(dir)))
+            GroqKey.clear(listOf(null, dir))
+            assertNull(GroqKey.load(listOf(dir)))
+        } finally { dir.deleteRecursively() }
+    }
     @Test fun keyLoadReadsPrivateFileOrReturnsNull() {
         val dir = kotlin.io.path.createTempDirectory().toFile()
         try {

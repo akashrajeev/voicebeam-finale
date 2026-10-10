@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -31,6 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.akashrajeev.voicebeam.core.GroqKey
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.akashrajeev.voicebeam.BuildConfig
@@ -86,6 +90,33 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             Text("Start Learn my voice on the listening screen so the microphone stays active.", color = Muted, fontSize = 12.sp)
             SwitchRow("Veto high-confidence wearer voice", "Off by default. May block a similar target; requires target voice learned too.", state.wearerVetoEnabled) { engine.setWearerVeto(it) }
             Button(onClick = { engine.clearWearerVoice() }) { Text("Clear my voice") }
+            SectionHeader("Online captions (optional)")
+            Text("Uses Groq Whisper for finished sentences when you add a key. It needs internet and sends that sentence's audio to Groq. If it fails, captions use the model on this phone.", color = Muted, fontSize = 12.sp)
+            var keyInput by remember { mutableStateOf("") }
+            var keySet by remember { mutableStateOf(GroqKey.load(listOf(context.getExternalFilesDir(null), context.filesDir)) != null) }
+            var keyMessage by remember { mutableStateOf("") }
+            Text(if (keySet) "Groq key: set" else "Groq key: not set", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+            OutlinedTextField(
+                value = keyInput, onValueChange = { keyInput = it }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(), textStyle = TextStyle(color = Color.White),
+                label = { Text("Paste Groq API key", color = Muted) }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
+            Row {
+                Button(onClick = {
+                    val ok = GroqKey.save(context.filesDir, keyInput)
+                    if (ok) {
+                        GroqKey.clear(listOf(context.getExternalFilesDir(null)))
+                        keySet = true; keyInput = ""
+                        keyMessage = "Saved. Fully close and reopen VoiceBeam to use it."
+                    } else {
+                        keyMessage = "That does not look like a Groq key."
+                    }
+                }) { Text("Save key") }
+                Button(onClick = {
+                    GroqKey.clear(listOf(context.getExternalFilesDir(null), context.filesDir))
+                    keySet = false; keyInput = ""; keyMessage = "Key removed."
+                }) { Text("Clear key") }
+            }
+            if (keyMessage.isNotEmpty()) Text(keyMessage, color = Muted, fontSize = 12.sp)
             SectionHeader("Live diagnostics")
             Text("Local technical logs only. No audio, captions or uploads. Share sends a text file only when you choose an app.", color = Muted, fontSize = 12.sp)
             Row {
@@ -106,7 +137,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             }
             Text(diagnosticText.lines().takeLast(12).joinToString("\n"), color = Muted, fontSize = 10.sp)
             SectionHeader("Privacy")
-            Text("Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account and uploads nothing. The only network use is the optional stage-caption page on your own Wi-Fi.",
+            Text("Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account. Network use is the optional stage-caption page on your own Wi-Fi and, only if you add a Groq key, the audio of finished sentences sent to Groq for captions.",
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
             ValueRow("Version", BuildConfig.VERSION_NAME)
         }
