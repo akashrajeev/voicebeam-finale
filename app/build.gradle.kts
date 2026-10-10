@@ -20,8 +20,8 @@ android {
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 114
-        versionName = "ENH-exp-ver5"
+        versionCode = 116
+        versionName = "ENH-exp-ver5b-clarity"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")

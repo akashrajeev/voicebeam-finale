@@ -164,6 +164,7 @@ class AudioPipeline(
         val alignment = DenoiseAlignment(maxOf(4096, frameShift * 8))
         val hearingMix = com.akashrajeev.voicebeam.core.HearingMix(SAMPLE_RATE)
         val rumbleFilter = com.akashrajeev.voicebeam.core.HearingRumbleFilter(SAMPLE_RATE)
+        val clarity = com.akashrajeev.voicebeam.core.ClarityShaper(SAMPLE_RATE)
         val denoiseFallback = com.akashrajeev.voicebeam.core.FallbackCounter()
         fun reportFallback(kind: String) {
             if (denoiseFallback.record(SystemClock.uptimeMillis())) {
@@ -289,6 +290,7 @@ class AudioPipeline(
                 val cleanVadUs = (SystemClock.elapsedRealtimeNanos() - cleanVadStart) / 1000
                 // Hearing only, before final envelope/limiter; detection and captions stay raw.
                 rumbleFilter.process(clean, n)
+                clarity.process(clean, n, g, gate.boostAllowed) // ver5b: presence only while gate fully open; no extra level for suppressed background
                 val requestedBoost = if (gate.boostAllowed) TargetGate.dbToLinear(boostDb) else 1f
                 val boost = FrameDsp.safeBoost(clean, n, g, requestedBoost) // diagnostic estimate; envelope limits actual output
                 val e = envelope.process(clean, n, g, requestedBoost, gated, out)
