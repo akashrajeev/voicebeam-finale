@@ -5,6 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -36,10 +39,14 @@ fun OfflineVideoPanel(allowed: Boolean, onBusy: (Boolean) -> Unit = {}, onImport
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { selected ->
         if(selected!=null) { uri=selected; start="0"; end="3"; result="" }
     }
-    Column(Modifier.fillMaxWidth().padding(bottom=12.dp)) {
-        Text("Custom video - offline isolation", color=Accent)
-        Text("1-120 seconds, under 256 MB. Pick 3-10 seconds where only the target speaks. Original stays unchanged. This does not change live listening.", color=Muted)
-        TextButton(onClick={ picker.launch(arrayOf("video/*")) },enabled=!busy && allowed,modifier=Modifier.testTag("pickOfflineVideo")) { Text("Choose video") }
+    Column(Modifier.fillMaxWidth().padding(bottom=12.dp).background(Card, RoundedCornerShape(16.dp)).padding(14.dp), verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        Text("Custom video - offline isolation", color=Accent, fontWeight=FontWeight.Bold)
+        Text("Keep one voice. Compare with the original.", color=androidx.compose.ui.graphics.Color.White)
+        Text("1  Choose your video", color=Muted)
+        Text("2  Mark 3-10 seconds of the target alone", color=Muted)
+        Text("3  Isolate locally, then play both versions", color=Muted)
+        Text("Up to 120 seconds / 256 MB. Original stays unchanged. Overlapping voices can still leak.", color=Muted, style=MaterialTheme.typography.bodySmall)
+        Button(onClick={ picker.launch(arrayOf("video/*")) },enabled=!busy && allowed,modifier=Modifier.fillMaxWidth().testTag("pickOfflineVideo")) { Text("Choose video") }
         if(!allowed) Text("Stop live listening and recording before offline isolation.",color=Muted)
         if(result.isNotBlank()) Text(result,color=Muted)
     }
@@ -62,7 +69,7 @@ fun OfflineVideoPanel(allowed: Boolean, onBusy: (Boolean) -> Unit = {}, onImport
                     importJob=scope.launch {
                         try {
                             when(val r=OfflineFootageImport.run(context,it,a,b)) {
-                                is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Offline isolated MP4 ready. Compare with original; extraction is not guaranteed."; uri=null; onImported() }
+                                is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Video ready. Tap the session below, then Original and Play video to compare. Isolation is not guaranteed."; uri=null; onImported() }
                                 is FootageResult.NeedsTap -> result="Original kept unchanged. Choose a 3-10 second moment where only the target speaks (" + r.reason.name + ")."
                             }
                         }
