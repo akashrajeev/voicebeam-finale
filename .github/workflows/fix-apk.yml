@@ -1,8 +1,8 @@
-name: Reminders Bright Paper lab validation and APK
-# REMINDERS-1.2: auto-set, visible manual entry, inline alert access, stable multi-word editing. Branch/artifacts only.
+name: Cloud clean (ElevenLabs toggle) lab validation and APK
+# CLOUD-1.0: optional ElevenLabs cloud clean toggle on top of CLOUD-1.0. One approved build, validate job only. Branch/artifacts only.
 on:
   push:
-    branches: [reminders-brightpaper-2026-10-10]
+    branches: [listen-cloud-clean-2026-10-10]
     paths: ['.github/workflows/fix-apk.yml']
   workflow_dispatch:
 permissions:
@@ -79,60 +79,13 @@ jobs:
           print(f'{tests} JVM tests; {failures} failures/errors. Debug APK built. Phone test separate.')
           PY
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | head -1 | tee "$RUNNER_TEMP/recall-version.txt"
-          grep -F "versionCode='127' versionName='REMINDERS-1.2'" "$RUNNER_TEMP/recall-version.txt"
+          grep -F "versionCode='128' versionName='CLOUD-1.0'" "$RUNNER_TEMP/recall-version.txt"
           sha256sum app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/VoiceBeam-REMINDERS-1.2.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/VoiceBeam-CLOUD-1.0.apk
       - name: Upload candidate APK
         uses: actions/upload-artifact@v4
         with:
-          name: VoiceBeam-REMINDERS-1.2-${{ github.sha }}
-          path: app/build/outputs/apk/debug/VoiceBeam-REMINDERS-1.2.apk
+          name: VoiceBeam-CLOUD-1.0-${{ github.sha }}
+          path: app/build/outputs/apk/debug/VoiceBeam-CLOUD-1.0.apk
           retention-days: 1
           if-no-files-found: error
-
-  reminders-emulator:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Fetch public models
-        run: bash scripts/fetch_models.sh
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Build x86 instrumentation APKs
-        env:
-          VB_EMULATOR: '1'
-        run: ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest -Dorg.gradle.jvmargs="-Xmx3g"
-      - name: Bright Paper UI and actual scheduling checks
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_2
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: |
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-            mkdir -p reminders-evidence
-            adb shell am instrument -w -e class com.akashrajeev.voicebeam.ReminderFlowTest com.akashrajeev.voicebeam.finale.test/androidx.test.runner.AndroidJUnitRunner | tee reminders-evidence/instrumentation.txt
-            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/ reminders-evidence/screenshots || true
-            adb logcat -d > reminders-evidence/logcat.txt
-            grep -F 'OK (1 test)' reminders-evidence/instrumentation.txt
-      - name: Upload test evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Reminders-1.1-emulator-evidence-${{ github.sha }}
-          path: reminders-evidence/
-          retention-days: 1
-          if-no-files-found: warn
