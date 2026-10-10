@@ -32,7 +32,7 @@ fun OfflineVideoPanel(allowed: Boolean, onBusy: (Boolean) -> Unit = {}, onImport
     }
     Column(Modifier.fillMaxWidth().padding(bottom=12.dp)) {
         Text("Custom video - offline isolation", color=Accent)
-        Text("1-120 seconds, under 256 MB. Pick 2-10 seconds where only the target speaks. Original stays unchanged. This does not change live listening.", color=Muted)
+        Text("1-120 seconds, under 256 MB. Pick 3-10 seconds where only the target speaks. Original stays unchanged. This does not change live listening.", color=Muted)
         TextButton(onClick={ picker.launch(arrayOf("video/*")) },enabled=!busy && allowed,modifier=Modifier.testTag("pickOfflineVideo")) { Text("Choose video") }
         if(!allowed) Text("Stop live listening and recording before offline isolation.",color=Muted)
         if(result.isNotBlank()) Text(result,color=Muted)
@@ -42,7 +42,7 @@ fun OfflineVideoPanel(allowed: Boolean, onBusy: (Boolean) -> Unit = {}, onImport
             onDismissRequest={ if(!busy) uri=null },
             title={ Text("Target-alone reference") },
             text={ Column {
-                Text("Watch your original video first. Enter start/end seconds containing only the target voice, no other speaker. Weak references or damaged extraction keep the original unchanged. Cannot isolate from a face alone. Quality varies, especially overlapping similar voices.")
+                Text("Watch your original video first. Enter start/end seconds containing only the target voice, no other speaker. Use at least 3 seconds when possible. Short or inconsistent references and damaged extraction keep the original unchanged. Cannot isolate from a face alone. Quality varies, especially overlapping similar voices.")
                 OutlinedTextField(start,{start=it},label={Text("Start seconds")},enabled=!busy,singleLine=true,modifier=Modifier.testTag("referenceStart"))
                 OutlinedTextField(end,{end=it},label={Text("End seconds")},enabled=!busy,singleLine=true,modifier=Modifier.testTag("referenceEnd"))
                 if(busy) { CircularProgressIndicator(); Text("Working locally. Up to 3 minutes. Keep this screen open.") }
