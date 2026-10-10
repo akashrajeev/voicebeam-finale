@@ -2,6 +2,7 @@ package com.akashrajeev.voicebeam.separation
 
 import android.content.Context
 import android.net.Uri
+import com.akashrajeev.voicebeam.core.ExtractionSafety
 import com.akashrajeev.voicebeam.core.ReferenceInterval
 import com.akashrajeev.voicebeam.core.WavWriter
 import com.akashrajeev.voicebeam.engine.SaveMode
@@ -40,13 +41,25 @@ object OfflineVideoImport {
             val raw=File(dir,"raw.wav")
             WavWriter(raw,16000).use { it.write(samples) }
             val clean=File(dir,"clean.wav")
-            OfflineSpeakerBeam.extract(context,raw,reference,clean)
+            var fallback: String? = null
+            val speech=OfflineSpeechMask.compute(context,samples)
+            if(!OfflineQualityGuard.reference(context,reference)) fallback="Reference quality check failed; choose 2-10 seconds of clear target-only speech"
+            else {
+                OfflineSpeakerBeam.extract(context,raw,reference,clean)
+                val extracted=WavWriter.read(clean).first
+                if(!OfflineQualityGuard.output(context,samples,extracted,reference,speech)) fallback="Extracted voice failed the speaker-retention check"
+                else WavWriter(clean,16000).use { it.write(ExtractionSafety.protect(samples,extracted,speech)) }
+            }
             coroutineContext.ensureActive()
             val videoTmp=File(dir,"video.tmp.mp4")
-            MediaExporter.muxVideoWithWav(original,clean,videoTmp)
-            require(videoTmp.length()>0 && videoTmp.renameTo(File(dir,"video.mp4"))) { "Cannot save isolated video" }
+            if(fallback!=null) {
+                original.copyTo(videoTmp)
+                raw.copyTo(clean,overwrite=true)
+            } else MediaExporter.muxVideoWithWav(original,clean,videoTmp)
+            require(videoTmp.length()>0 && videoTmp.renameTo(File(dir,"video.mp4"))) { "Cannot save video" }
             coroutineContext.ensureActive()
-            val meta=SessionMeta(id,"Offline isolated video",System.currentTimeMillis(),samples.size*1000L/16000,SaveMode.AUDIO_VIDEO,"none",dir)
+            val meta=SessionMeta(id,if(fallback==null) "Offline isolated video" else "Original kept - isolation not trusted",System.currentTimeMillis(),samples.size*1000L/16000,SaveMode.AUDIO_VIDEO,"none",dir)
+            if(fallback!=null) File(dir,"offline-fallback.txt").writeText(fallback)
             File(dir,"offline-reference.txt").writeText("Offline SpeakerBeam. Target-alone reference: $start to $end seconds. Original retained. Not live separation. Extraction quality is not guaranteed.\n")
             store.writeMeta(meta, emptyList())
             meta
