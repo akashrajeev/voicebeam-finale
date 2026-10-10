@@ -51,18 +51,23 @@ object FootageAnalysis {
         val assign = IntArray(ws.size) { -1 }
         val purity = FloatArray(ws.size)
         if (valid.isEmpty()) return ClusterResult(assign, 0, purity)
-        val groups = valid.map { mutableListOf(it) }.toMutableList()
-        while (groups.size > 1) {
+        // Average-link with a cached cosine matrix and Lance-Williams size-weighted updates (same result as recomputing, O(n^2) memory, no repeated 192-dim cosines).
+        val m = valid.size
+        val sim = Array(m) { FloatArray(m) }
+        for (i in 0 until m) for (j in i + 1 until m) { val c = cosine(ws[valid[i]].emb!!, ws[valid[j]].emb!!); sim[i][j] = c; sim[j][i] = c }
+        val active = BooleanArray(m) { true }; val size = IntArray(m) { 1 }
+        val members = Array(m) { mutableListOf(valid[it]) }
+        while (true) {
             var best = -2f; var bi = -1; var bj = -1
-            for (i in groups.indices) for (j in i + 1 until groups.size) {
-                var sum = 0f
-                for (x in groups[i]) for (y in groups[j]) sum += cosine(ws[x].emb!!, ws[y].emb!!)
-                val avg = sum / (groups[i].size * groups[j].size)
-                if (avg > best) { best = avg; bi = i; bj = j }
+            for (i in 0 until m) { if (!active[i]) continue
+                for (j in i + 1 until m) if (active[j] && sim[i][j] > best) { best = sim[i][j]; bi = i; bj = j } }
+            if (bi < 0 || best < mergeCos) break
+            for (k in 0 until m) if (active[k] && k != bi && k != bj) {
+                val v = (sim[bi][k] * size[bi] + sim[bj][k] * size[bj]) / (size[bi] + size[bj]); sim[bi][k] = v; sim[k][bi] = v
             }
-            if (best < mergeCos) break
-            groups[bi].addAll(groups[bj]); groups.removeAt(bj)
+            size[bi] += size[bj]; members[bi].addAll(members[bj]); active[bj] = false
         }
+        val groups = (0 until m).filter { active[it] }.map { members[it] }
         val keep = groups.filter { it.size >= minClusterWindows }.sortedByDescending { it.size }.take(maxClusters)
         if (keep.isEmpty()) return ClusterResult(assign, 0, purity)
         val cents = keep.map { centroid(ws, it) }
