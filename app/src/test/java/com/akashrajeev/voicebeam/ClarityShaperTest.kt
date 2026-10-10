@@ -8,7 +8,7 @@ class ClarityShaperTest {
     private fun rms(a: FloatArray, from: Int) = sqrt(a.drop(from).map { it.toDouble() * it }.average())
     private fun gainDb(hz: Double, gate: Float, allowed: Boolean): Double {
         val s = ClarityShaper(); val x = tone(hz, 16000); val y = x.copyOf()
-        for (i in 0 until 16000 step 256) { val b = y.copyOfRange(i, i + 256); s.process(b, 256, gate, allowed); b.copyInto(y, i) }
+        for (i in 0 until 15872 step 256) { val b = y.copyOfRange(i, i + 256); s.process(b, 256, gate, allowed); b.copyInto(y, i) }
         return 20 * log10(rms(y, 4000) / rms(x, 4000))
     }
     @Test fun liftsPresenceWhenOpen() { assertEquals(3.5, gainDb(2800.0, 1f, true), .4) }
