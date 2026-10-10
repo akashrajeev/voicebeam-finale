@@ -43,7 +43,7 @@ object FootageAnalysis {
      * Windows with null/non-finite embeddings abstain (-1). Clusters smaller than minClusterWindows abstain; if none qualify, nothing is clustered.
      * If more than maxClusters qualify, only the largest maxClusters are kept and the rest abstain.
      */
-    fun cluster(ws: List<WindowEmbedding>, mergeCos: Float = 0.55f, maxClusters: Int = 6, minClusterWindows: Int = 3): ClusterResult {
+    fun cluster(ws: List<WindowEmbedding>, mergeCos: Float = 0.5f, maxClusters: Int = 6, minClusterWindows: Int = 3): ClusterResult {
         require(mergeCos.isFinite() && mergeCos in -1f..1f && maxClusters >= 1 && minClusterWindows >= 1) { "bad cluster parameters" }
         val valid = ws.indices.filter { finite(ws[it].emb) }
         val dim = valid.firstOrNull()?.let { ws[it].emb!!.size }
@@ -138,13 +138,20 @@ object FootageAnalysis {
      * Auto-reference: bins where target is the ONLY active cluster, window purity >= minPurity, and (when lip data exist)
      * target lips on / others unknown-or-off. Returns up to maxSec of the most pure contiguous runs; null if under minSec.
      */
-    fun autoReference(
-        labels: Array<Seg>, binPurity: FloatArray, lipOn: BooleanArray?,
-        minPurity: Float = 0.15f, minSec: Float = 3f, maxSec: Float = 10f, minRunSec: Float = 1f
+    private fun autoReferenceInternal(
+        labels: Array<Seg>, binPurity: FloatArray, clusterCount: Int, lipOn: BooleanArray? = null,
+        othersOffLip: BooleanArray? = null,
+        minPurity: Float = 0.30f, minSec: Float = 3f, maxSec: Float = 10f, minRunSec: Float = 1f
     ): List<Interval>? {
+        require(clusterCount >= 1) { "no clusters: nothing to reference" }
+        require(minPurity.isFinite() && minSec.isFinite() && maxSec.isFinite() && minRunSec.isFinite() &&
+            minSec > 0f && maxSec >= minSec && minRunSec > 0f) { "bad autoReference limits" }
+        // A single cluster is no evidence that other speakers are off (calibration: 76-82% contaminated refs). Abstain unless lips confirm.
+        if (clusterCount < 2 && othersOffLip == null) return null
+        require(othersOffLip == null || othersOffLip.size == labels.size) { "series length mismatch" }
         require(binPurity.size == labels.size && (lipOn == null || lipOn.size == labels.size)) { "series length mismatch" }
         val ok = BooleanArray(labels.size) { b ->
-            labels[b] == Seg.TARGET_ONLY && binPurity[b] >= minPurity && (lipOn == null || lipOn[b])
+            labels[b] == Seg.TARGET_ONLY && binPurity[b] >= minPurity && (lipOn == null || lipOn[b]) && (othersOffLip == null || othersOffLip[b])
         }
         data class Run(val a: Int, val b: Int, val score: Float)
         val runs = ArrayList<Run>()
@@ -180,5 +187,33 @@ object FootageAnalysis {
             }
         }
         return p
+    }
+
+    /**
+     * The ONLY public way to obtain an auto-reference. clusterCount is taken from the clustering result itself and cannot be
+     * supplied by a caller, so a single-cluster (or zero-cluster) analysis structurally cannot hand out a reference unless
+     * the caller provides explicit others-off lip evidence.
+     */
+    fun analyze(ws: List<WindowEmbedding>, res: ClusterResult, durationSec: Float, target: Int): TargetAnalysis =
+        TargetAnalysis(ws, res, durationSec, target)
+
+    /** Every field is derived from the clustering result; there is no constructor parameter for clusterCount. */
+    class TargetAnalysis internal constructor(ws: List<WindowEmbedding>, res: ClusterResult, durationSec: Float, val target: Int) {
+        val clusterCount: Int = res.clusterCount
+        val activity: Array<BooleanArray>
+        val labels: Array<Seg>
+        val purity: FloatArray
+        init {
+            require(res.assign.size == ws.size) { "result/window count mismatch" }
+            require(target in 0 until res.clusterCount) { "target $target outside ${res.clusterCount} clusters" }
+            activity = binActivity(ws, res, durationSec)
+            labels = labelBins(activity, target)
+            purity = binPurity(ws, res, durationSec, target)
+        }
+        fun autoReference(
+            lipOn: BooleanArray? = null, othersOffLip: BooleanArray? = null,
+            minPurity: Float = 0.30f, minSec: Float = 3f, maxSec: Float = 10f, minRunSec: Float = 1f
+        ): List<Interval>? =
+            autoReferenceInternal(labels, purity, clusterCount, lipOn, othersOffLip, minPurity, minSec, maxSec, minRunSec)
     }
 }
