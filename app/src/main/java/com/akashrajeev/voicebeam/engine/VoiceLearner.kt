@@ -11,13 +11,26 @@ class VoiceLearner(
     private val sampleRate: Int = 16000,
     private val chunkSeconds: Float = 3f,
     private val needed: Int = 3,
+    private val clockMs: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val profile: com.akashrajeev.voicebeam.core.SpeakerProfile = com.akashrajeev.voicebeam.core.SpeakerProfile.DEFAULT,
 ) {
     private val chunk = (sampleRate * chunkSeconds).toInt()
     private val enrollBuf = FloatArray(chunk)
     private var enrollFill = 0
     private val scoreBuf = FloatArray(chunk)
     private var scoreFill = 0
+    private val queryHop = sampleRate.coerceAtLeast(1).coerceAtMost(chunk)
+    private var querySinceScore = 0
+    private var queryHasScore = false
+    var queryInputSamples = 0L
+        private set
+    var scoreQuerySamples = 0L
+        private set
+    val querySamplesBuffered: Int get() = scoreFill
     private val prints = mutableListOf<FloatArray>()
+    private var enrollmentStartedMs = 0L
+    private var failedRounds = 0
+    private val consistencyCosine = .45f
     @Volatile var lastQueryEmbedding: FloatArray? = null
         private set
     @Volatile var enrollmentEnabled = false
@@ -27,19 +40,24 @@ class VoiceLearner(
     @Volatile var enrollmentMessage: String = "Voice not learned"
         private set
     val learned: Boolean get() = centroid != null
-    val progress: Float get() = if (learned) 1f else (prints.size + enrollFill / chunk.toFloat()) / needed.toFloat()
+    val progress: Float get() = if (learned && !enrollmentEnabled) 1f else (prints.size + enrollFill / chunk.toFloat()) / needed.toFloat()
     val completedPhrases: Int get() = prints.size
 
     /** Deliberate clean target enrollment; retain frozen template until explicitly restarted. */
     @Synchronized fun beginEnrollment() {
-        reset(); enrollmentEnabled = true; enrollmentMessage="Learning: only this person speaks"
+        // Preserve the published profile until a complete, consistent replacement is ready.
+        prints.clear(); enrollFill = 0; failedRounds = 0; enrollmentStartedMs = clockMs()
+        enrollmentEnabled = true; enrollmentMessage="Learning: only this person speaks"
+        clearQuery()
     }
 
     /** Feed voiced audio. [lipWeight] is how sure we are the locked person is the one talking. Returns a new match score when one is ready. */
     @Synchronized
     fun feed(samples: FloatArray, lipWeight: Float): Float? {
-        if (!learned) {
-            if (!enrollmentEnabled) return null
+        if (enrollmentEnabled) {
+            if (clockMs() - enrollmentStartedMs > 30_000) {
+                cancelEnrollment("Enrollment timed out: previous profile kept"); return null
+            }
             var off = 0
             while (off < samples.size && enrollmentEnabled) {
                 val n = minOf(samples.size - off, chunk - enrollFill)
@@ -56,24 +74,50 @@ class VoiceLearner(
                     } else enrollmentMessage = "Too quiet: move closer and speak alone"
                     enrollFill = 0
                     if (prints.size >= needed) {
-                        centroid = validEmbedding(VoiceMatch.average(prints))
-                        enrollmentEnabled = centroid == null
-                        enrollmentMessage = if (centroid != null) "LEARNED" else "Embedding failed: restart learning"
+                        val consistent = prints.indices.all { x ->
+                            (x + 1 until prints.size).all { y -> VoiceMatch.cosine(prints[x], prints[y]) >= consistencyCosine }
+                        }
+                        val replacement = if (consistent) validEmbedding(VoiceMatch.average(prints)) else null
+                        if (replacement != null) {
+                            centroid = replacement // atomic published-template replacement
+                            enrollmentEnabled = false; enrollmentMessage = "LEARNED"; clearQuery()
+                        } else {
+                            failedRounds++; prints.clear(); enrollFill = 0
+                            if (failedRounds >= 2) cancelEnrollment("Inconsistent captures: previous profile kept")
+                            else enrollmentMessage = "Inconsistent captures: speak alone and retry"
+                        }
                     }
                 }
             }
             return null
         }
-        scoreFill = append(scoreBuf, scoreFill, samples)
-        if (scoreFill < chunk) return null
-        scoreFill = 0
-        val e = validEmbedding(embed(scoreBuf.copyOf())) ?: return null
-        lastQueryEmbedding = e
-        val c = centroid ?: return null
-        if (e.size != c.size) return null
-        val score = VoiceMatch.score(VoiceMatch.cosine(e, c))
-        // Lab: freeze enrolment; self-confirming adaptation can learn a distractor.
-        return score
+        if (!learned) return null
+        // Full 3-second context, refreshed per voiced second. Never extend score freshness
+        // without computing a new embedding, and never modify the enrollment centroid.
+        var latest: Float? = null
+        var offset = 0
+        while (offset < samples.size) {
+            val untilDecode = if (queryHasScore) queryHop - querySinceScore else chunk - scoreFill
+            val n = minOf(samples.size - offset, untilDecode)
+            if (scoreFill + n > chunk) {
+                val discard = scoreFill + n - chunk
+                System.arraycopy(scoreBuf, discard, scoreBuf, 0, scoreFill - discard)
+                scoreFill -= discard
+            }
+            System.arraycopy(samples, offset, scoreBuf, scoreFill, n)
+            scoreFill += n; offset += n; querySinceScore += n; queryInputSamples += n
+            if (scoreFill == chunk && (!queryHasScore || querySinceScore >= queryHop)) {
+                querySinceScore = 0; queryHasScore = true
+                val e = validEmbedding(embed(scoreBuf.copyOf()))
+                val c = centroid
+                if (e != null && c != null && e.size == c.size) {
+                    scoreQuerySamples = queryInputSamples
+                    lastQueryEmbedding = e
+                    latest = profile.score(VoiceMatch.cosine(e, c))
+                }
+            }
+        }
+        return latest
     }
 
     private fun validEmbedding(e: FloatArray?): FloatArray? {
@@ -83,12 +127,14 @@ class VoiceLearner(
         return FloatArray(e.size) { (e[it] / norm).toFloat() }
     }
 
-    private fun append(buf: FloatArray, fill: Int, s: FloatArray): Int {
-        val n = minOf(s.size, buf.size - fill)
-        System.arraycopy(s, 0, buf, fill, n)
-        return fill + n
+    /** Retapping preserves the frozen template, but discards the old face's query audio. */
+    @Synchronized
+    fun clearQuery() { lastQueryEmbedding = null; scoreFill = 0; querySinceScore = 0; queryHasScore = false; queryInputSamples = 0; scoreQuerySamples = 0 }
+
+    @Synchronized fun cancelEnrollment(message: String = "Enrollment cancelled: previous profile kept") {
+        enrollmentEnabled = false; prints.clear(); enrollFill = 0; enrollmentMessage = if (learned) message else "Voice not learned"
     }
 
     @Synchronized
-    fun reset() { enrollmentMessage="Voice not learned (cleared/interrupted)"; lastQueryEmbedding = null; enrollmentEnabled = false; prints.clear(); centroid = null; enrollFill = 0; scoreFill = 0 }
+    fun reset() { enrollmentMessage="Voice not learned (cleared/interrupted)"; lastQueryEmbedding = null; enrollmentEnabled = false; prints.clear(); centroid = null; enrollFill = 0; scoreFill = 0; querySinceScore = 0; queryHasScore = false; queryInputSamples = 0; scoreQuerySamples = 0 }
 }
