@@ -41,7 +41,7 @@ class RecallRecorderService : Service() {
         return START_NOT_STICKY
     }
     private fun capture() {
-        val chunker=RecallChunker();var session=0L
+        val chunker=RecallChunker();var session=0L;var samplesRecorded=0L;var lastProgress=0L
         try {
             val min=AudioRecord.getMinBufferSize(16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT)
             check(min>0) { "Microphone format unavailable" }
@@ -57,11 +57,16 @@ class RecallRecorderService : Service() {
                 if(n==0) continue
                 for(i in 0 until n) floats[i]=pcm[i]/32768f
                 check(filesDir.usableSpace>20_000_000L) { "Recording paused. Free storage to continue." }
+                samplesRecorded+=n
+                val duration=samplesRecorded*1000/16000
+                if(duration-lastProgress>=1000) {
+                    repository.recordingProgress(session,duration);repository.store.duration(session,duration);lastProgress=duration
+                }
                 chunker.add(floats,n) { start,audio -> repository.queued(session,start,audio) }
             }
         } catch(t: Exception) { repository.refresh(t.message?:"Recording paused") }
         finally {
-            if(session!=0L) runCatching { chunker.finish { start,audio -> repository.queued(session,start,audio) } }
+            if(session!=0L) runCatching { repository.store.duration(session,samplesRecorded*1000/16000);repository.recordingProgress(session,samplesRecorded*1000/16000);chunker.finish { start,audio -> repository.queued(session,start,audio) } }
             runCatching { recorder?.stop() };recorder?.release();recorder=null
             running.set(false);repository.recording(false);repository.refresh()
             stopForeground(STOP_FOREGROUND_REMOVE);stopSelf()

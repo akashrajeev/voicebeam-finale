@@ -8,9 +8,9 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", null, 3) {
+class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", null, 4) {
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE sessions(id INTEGER PRIMARY KEY, start INTEGER NOT NULL, title TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE sessions(id INTEGER PRIMARY KEY, start INTEGER NOT NULL, title TEXT NOT NULL, duration_ms INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE TABLE segments(id INTEGER PRIMARY KEY, session INTEGER NOT NULL, start INTEGER NOT NULL, duration INTEGER NOT NULL, path TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'queued', speaker TEXT NOT NULL DEFAULT '', vector BLOB, notes TEXT NOT NULL DEFAULT '[]', processing_ms INTEGER NOT NULL DEFAULT 0)")
         createEmbeddings(db)
         db.execSQL("CREATE INDEX segment_session ON segments(session,start)")
@@ -19,6 +19,7 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
         if(old<2) db.execSQL("ALTER TABLE segments ADD COLUMN processing_ms INTEGER NOT NULL DEFAULT 0")
         if(old<3) createEmbeddings(db)
+        if(old<4) db.execSQL("ALTER TABLE sessions ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0")
     }
     private fun createEmbeddings(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE embeddings(segment INTEGER NOT NULL, position INTEGER NOT NULL, text TEXT NOT NULL, vector BLOB NOT NULL, PRIMARY KEY(segment,position))")
@@ -34,13 +35,13 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
     }
-    fun search(query: FloatArray, session: Long?): List<RecallSegment> {
-        val segments=segments(session).associateBy { it.id }
+    fun search(query: FloatArray, session: Long?, allowed: Set<Long>? = null): List<RecallSegment> {
+        val segments=segments(session).filter { allowed==null || it.session in allowed }.associateBy { it.id }
         val matches=readableDatabase.rawQuery("SELECT segment,text,vector FROM embeddings",null).use { c -> buildList {
             while(c.moveToNext()) {
                 val source=segments[c.getLong(0)]?:continue
                 val bytes=c.getBlob(2);val b=ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);val vector=FloatArray(bytes.size/4) { b.float }
-                add(RecallGrounding.cosine(query,vector) to source.copy(text=c.getString(1)))
+                add(RecallGrounding.cosine(query,vector) to source)
             }
         } }
         return matches.sortedByDescending { it.first }.map { it.second }.distinctBy { it.id }.take(6)
@@ -51,8 +52,8 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
     fun add(session: Long, start: Long, duration: Long, file: File) = writableDatabase.insertOrThrow("segments", null, ContentValues().apply {
         put("session", session); put("start", start); put("duration", duration); put("path", file.absolutePath)
     })
-    fun sessions(): List<RecallSession> = readableDatabase.rawQuery("SELECT id,start,title FROM sessions ORDER BY start DESC", null).use { c ->
-        buildList { while(c.moveToNext()) add(RecallSession(c.getLong(0),c.getLong(1),c.getString(2))) }
+    fun sessions(): List<RecallSession> = readableDatabase.rawQuery("SELECT id,start,title,duration_ms FROM sessions ORDER BY start DESC", null).use { c ->
+        buildList { while(c.moveToNext()) add(RecallSession(c.getLong(0),c.getLong(1),c.getString(2),c.getLong(3))) }
     }
     fun segments(session: Long? = null): List<RecallSegment> = readableDatabase.rawQuery(
         "SELECT id,session,start,duration,path,text,status,speaker,vector,notes,processing_ms FROM segments" + if(session == null) " ORDER BY id" else " WHERE session=? ORDER BY start",
@@ -78,6 +79,7 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
         }
         writableDatabase.update("segments",v,"id=?",arrayOf(id.toString()))
     }
+    fun duration(id: Long, duration: Long) = writableDatabase.update("sessions",ContentValues().apply { put("duration_ms",duration) },"id=?",arrayOf(id.toString()))
     fun rename(id: Long, name: String) = writableDatabase.update("sessions",ContentValues().apply { put("title",name.trim().take(100)) },"id=?",arrayOf(id.toString()))
     fun delete(session: Long) {
         val files = segments(session).map { File(it.path) }

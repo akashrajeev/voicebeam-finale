@@ -1,5 +1,5 @@
 name: recall-gemma-2026-10-10 validation and APK
-# Recall build iterations approved by owner; branch-only, artifacts only.
+# RECALL-2.1: conversation transcript, cited generated answers and duration. Branch/artifacts only.
 on:
   push:
     branches: [recall-gemma-2026-10-10]

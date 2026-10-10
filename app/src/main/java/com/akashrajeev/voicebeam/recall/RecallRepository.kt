@@ -11,7 +11,8 @@ import kotlinx.coroutines.sync.withLock
 
 data class RecallUiState(val recording: Boolean = false, val message: String = "Ready to remember",
     val sessions: List<RecallSession> = emptyList(), val segments: List<RecallSegment> = emptyList(),
-    val modelsReady: Boolean = false, val busy: Boolean = false, val asking: Boolean = false, val answers: List<RecallSegment> = emptyList())
+    val modelsReady: Boolean = false, val busy: Boolean = false, val asking: Boolean = false, val answers: List<RecallAnswer> = emptyList(),
+    val recordingSession: Long? = null, val recordingDuration: Long = 0L)
 
 class RecallRepository(private val context: Context) {
     val store = RecallStore(context)
@@ -28,6 +29,9 @@ class RecallRepository(private val context: Context) {
             modelsReady=RecallModelFiles.ready(context),message=message?:_state.value.message,busy=busy?:_state.value.busy)
     }
     @Synchronized fun recording(active: Boolean) { _state.value=_state.value.copy(recording=active) }
+    @Synchronized fun recordingProgress(session: Long, duration: Long) {
+        _state.value=_state.value.copy(recordingSession=session,recordingDuration=duration)
+    }
     fun install(spec: RecallModelFiles.Spec? = null, uri: Uri? = null) = scope.launch {
         maintenance.withLock {
             refresh("Installing local models",true)
@@ -128,7 +132,7 @@ class RecallRepository(private val context: Context) {
             process()
         }
     }
-    fun ask(question: String, session: Long? = null) = scope.launch {
+    fun ask(question: String, session: Long? = null, dayStart: Long? = null, dayEnd: Long? = null) = scope.launch {
         if(question.isBlank()) return@launch
         synchronized(this@RecallRepository) {
             if(_state.value.asking) return@launch
@@ -139,12 +143,13 @@ class RecallRepository(private val context: Context) {
             val answers=inference.withLock {
                 models.initialize()
                 require(question.toByteArray().size<=600) { "Please shorten the question and try again" }
-                val query=models.embedding(question,true)
-                val sources=store.search(query,session)
+                val allowed=store.sessions().filter { session!=null && it.id==session || session==null && (dayStart==null || it.start>=dayStart) && (dayEnd==null || it.start<dayEnd) }.map { it.id }.toSet()
+                val sources=if(RecallConversation.summaryQuestion(question)) store.segments(session).filter { it.session in allowed && it.text.isNotBlank() }
+                    else store.search(models.embedding(question,true),session,allowed)
                 if(sources.isEmpty()) emptyList() else models.answer(question,sources)
             }
             synchronized(this@RecallRepository) { _state.value=_state.value.copy(answers=answers) }
-            refresh(if(answers.isEmpty()) "Record a relevant conversation to find the answer" else "Answers from your transcript",false)
+            refresh(if(answers.isEmpty()) "Record a relevant conversation to find the answer" else "Answer with source evidence. Replay to verify.",false)
         } catch(t: Exception) { refresh(t.message?:"Try your question again",false) }
         finally { synchronized(this@RecallRepository) { _state.value=_state.value.copy(asking=false) } }
     }

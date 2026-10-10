@@ -43,7 +43,7 @@ object RecallGrounding {
 data class RecallSegment(val id: Long, val session: Long, val start: Long, val duration: Long,
     val path: String, val text: String, val status: String, val speaker: String,
     val vector: FloatArray? = null, val notes: String = "[]", val processingMs: Long = 0L)
-data class RecallSession(val id: Long, val start: Long, val title: String)
+data class RecallSession(val id: Long, val start: Long, val title: String, val duration: Long = 0L)
 
 /** Byte budget is conservative for multilingual byte-fallback tokenization; no text is discarded. */
 object RecallTextSlices {
@@ -83,3 +83,45 @@ object RecallTranscriptQuality {
         return false
     }
 }
+
+/** Windows are replay anchors, never speaker boundaries. Raw ASR and audio remain unchanged. */
+data class RecallTranscriptEntry(val source: RecallSegment, val text: String)
+object RecallConversation {
+    fun duration(clips: List<RecallSegment>) = clips.maxOfOrNull { it.start + it.duration } ?: 0L
+    fun clock(ms: Long): String {
+        val seconds=maxOf(0L,ms)/1000
+        return if(seconds>=3600) "%d:%02d:%02d".format(seconds/3600,seconds/60%60,seconds%60)
+            else "%d:%02d".format(seconds/60,seconds%60)
+    }
+    fun transcript(clips: List<RecallSegment>): List<RecallTranscriptEntry> {
+        var previous: RecallSegment?=null
+        return clips.sortedBy { it.start }.mapNotNull { clip ->
+            if(clip.text.isBlank()) { previous=null;return@mapNotNull null }
+            val before=previous;previous=clip
+            val text=if(before!=null && before.session==clip.session && before.start+before.duration>clip.start)
+                removeOverlap(before.text,clip.text) else clip.text.trim()
+            text.takeIf { it.isNotBlank() }?.let { RecallTranscriptEntry(clip,it) }
+        }
+    }
+    private fun removeOverlap(left: String, right: String): String {
+        val a=Regex("\\S+").findAll(left).toList();val b=Regex("\\S+").findAll(right).toList()
+        fun key(s: String)=s.lowercase().trim { !it.isLetterOrDigit() }
+        // At least two words, capped to the likely one-second overlap. Don't erase whole clips.
+        for(n in minOf(12,a.size,b.size-1) downTo 2) {
+            if(a.takeLast(n).map { key(it.value) }==b.take(n).map { key(it.value) })
+                return right.substring(b[n].range.first).trim()
+        }
+        return right.trim()
+    }
+    fun summaryQuestion(question: String): Boolean {
+        val q=question.lowercase()
+        return Regex("\\b(summar(?:y|ize|ise)|recap|overview|key points)\\b").containsMatchIn(q) ||
+            Regex("\\bwhat\\b.*\\b(talk|discuss|do|did|happen|cover|learn|say|said)\\b").containsMatchIn(q)
+    }
+    /** Honest fallback key points: unchanged source excerpts, not invented actions. */
+    fun keyPoints(text: String): List<String> = text.split(Regex("(?<=[.!?।])\\s+|\\n+"))
+        .map { it.trim() }.filter { it.isNotBlank() }.distinct().take(3)
+}
+
+data class RecallCitation(val source: RecallSegment, val quote: String)
+data class RecallAnswer(val text: String, val citations: List<RecallCitation>, val generated: Boolean)

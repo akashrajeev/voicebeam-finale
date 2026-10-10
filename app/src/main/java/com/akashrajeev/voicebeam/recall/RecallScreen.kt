@@ -112,6 +112,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                 item {
                     RecallPanel {
                         Text(if(state.recording) "● Recording your day" else "Remember your next conversation",fontSize=19.sp,fontWeight=FontWeight.Bold,color=Sand)
+                        if(state.recording) Text("Elapsed ${RecallConversation.clock(state.recordingDuration)} · continues until Pause or a device interruption",color=Mint)
                         Text("Speech becomes notes. You stay present.",color=Color(0xFFACC6BD))
                         Button(onClick={if(state.recording) context.startService(Intent(context,RecallRecorderService::class.java).setAction(RecallRecorderService.STOP)) else consent=true},enabled=state.modelsReady) {
                             Text(if(state.recording) "Pause" else "Start recording")
@@ -136,7 +137,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                         Text(time(session.start),color=Mint,fontSize=12.sp)
                         Text(session.title,color=Sand,fontSize=20.sp,fontWeight=FontWeight.SemiBold)
                         Text(clips.firstOrNull { it.text.isNotBlank() }?.text?.take(150)?:"${clips.size} audio moments saved",color=Color(0xFFACC6BD))
-                        Text("${clips.size} moments · Tap for notes and replay ›",color=Color(0xFF8AABA0),fontSize=12.sp)
+                        Text("${RecallConversation.clock(maxOf(session.duration,RecallConversation.duration(clips)))} recorded · ${clips.size} replay anchors ›",color=Color(0xFF8AABA0),fontSize=12.sp)
                     }
                 }
                 item {
@@ -159,7 +160,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
             }
             if(page=="all") {
                 items(state.sessions,key={it.id}) { session -> RecallPanel(Modifier.clickable { selected=session.id;title=session.title;page="detail" }) {
-                    Text(time(session.start),color=Mint);Text(session.title,color=Sand,fontSize=20.sp)
+                    Text("${time(session.start)} · ${RecallConversation.clock(maxOf(session.duration,RecallConversation.duration(state.segments.filter { it.session==session.id })))}",color=Mint);Text(session.title,color=Sand,fontSize=20.sp)
                 } }
             }
             if(page=="detail") {
@@ -170,12 +171,39 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                         TextButton(onClick={deletion=true},enabled=!state.recording) { Text("Delete") }
                     }
                     TextButton(onClick={
-                        val text=state.segments.filter { it.session==selected }.joinToString("\n\n") { "[Source ${it.id}, ${it.start/1000}s] ${it.text}" }
+                        val text=RecallConversation.transcript(state.segments.filter { it.session==selected }).joinToString("\n\n") { "[${RecallConversation.clock(it.source.start)}, source ${it.source.id}] ${it.text}" }
                         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text),"Share conversation transcript"))
                     }) { Text("Share transcript") }
                 }
                 val clips=state.segments.filter { it.session==selected }
-                items(clips,key={it.id}) { clip ->
+                val conversation=RecallConversation.transcript(clips)
+                item {
+                    val saved=state.sessions.find { it.id==selected }?.duration?:0L
+                    val live=if(state.recording && state.recordingSession==selected) state.recordingDuration else 0L
+                    Text("Recorded ${RecallConversation.clock(maxOf(saved,live,RecallConversation.duration(clips)))}",color=Mint)
+                    Text("One continuous recording. Replay anchors are 25-second windows, not different speakers.",color=Color(0xFFACC6BD),fontSize=12.sp)
+                    Text("CONVERSATION TRANSCRIPT",color=Sand,fontWeight=FontWeight.Bold)
+                    if(conversation.isEmpty()) Text("Audio saved. Transcript is still processing or held for review.",color=Sand)
+                }
+                if(conversation.isNotEmpty()) item { RecallPanel {
+                    conversation.forEach { entry ->
+                        TextButton(onClick={replay(entry.source)}) { Text("▶ ${RecallConversation.clock(entry.source.start)} · source ${entry.source.id}") }
+                        if(entry.source.speaker.isNotBlank()) Text(entry.source.speaker,color=Mint)
+                        Text(entry.text,color=Sand)
+                    }
+                } }
+                item {
+                    Text("KEY POINTS · SOURCE EXTRACTS",color=Sand,fontWeight=FontWeight.Bold)
+                    val points=clips.flatMap { clip ->
+                        val notes=runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray())
+                        if(notes.length()==0 && clip.text.isNotBlank()) RecallConversation.keyPoints(clip.text).map { clip to it }
+                        else (0 until notes.length()).mapNotNull { i -> notes.optJSONObject(i)?.optString("quote")?.takeIf { it.isNotBlank() }?.let { clip to it } }
+                    }.distinctBy { it.second }
+                    points.forEach { (clip,quote) -> Text(quote,color=Sand);TextButton(onClick={replay(clip)}) { Text("▶ Source ${clip.id}") } }
+                    if(points.isEmpty()) Text("Key points appear after speech processing.",color=Sand)
+                    Text("AUDIO REPLAY & PROCESSING",color=Sand,fontWeight=FontWeight.Bold)
+                }
+                items(clips,key={"audio-${it.id}"}) { clip ->
                     var speaker by rememberSaveable(clip.id) { mutableStateOf(clip.speaker) }
                     var notesOpen by rememberSaveable(clip.id) { mutableStateOf(false) }
                     var transcriptOpen by rememberSaveable(clip.id) { mutableStateOf(false) }
@@ -187,7 +215,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                             Text("Queue position $position · audio safely saved",color=Mint,fontSize=12.sp)
                         }
                         if(clip.status=="review") Text("Transcript held for review · replay or retry the original",color=Mint,fontSize=12.sp)
-                        if(clip.status=="quiet") Text("Near-silence · original audio kept",color=Mint,fontSize=12.sp)
+                        if(clip.status=="quiet") Text("No clear speech detected · original audio kept",color=Mint,fontSize=12.sp)
                         if(clip.status in listOf("retry","needs_index","quiet","review")) TextButton(onClick={repo.retry()}) { Text("Retry this saved audio") }
                         TextButton(onClick={replay(clip)}) { Text("▶ Replay original moment") }
                         if(clip.processingMs>0) Text("Processing time: ${clip.processingMs/1000}s · ${clip.status}",color=Color(0xFF8AABA0),fontSize=12.sp)
@@ -206,8 +234,8 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                                 else playbackError="Open your calendar to add this reminder"
                             }) { Text("Add reminder") }
                         }
-                        TextButton(onClick={transcriptOpen=!transcriptOpen}) { Text("${if(transcriptOpen) "▾" else "▸"} Original transcript") }
-                        Text(if(transcriptOpen) clip.text.ifBlank { "Audio saved · ${clip.status}" } else clip.text.take(140).ifBlank { "Audio saved · ${clip.status}" },color=Sand)
+                        TextButton(onClick={transcriptOpen=!transcriptOpen}) { Text("${if(transcriptOpen) "▾" else "▸"} Raw window transcript") }
+                        if(transcriptOpen) Text(clip.text.ifBlank { "Audio saved · ${clip.status}" },color=Sand)
                         if(clip.speaker.isNotBlank()) Text(clip.speaker,color=Mint)
                         if(clip.text.isNotBlank()) TextButton(onClick={speakerOpen=!speakerOpen}) { Text("${if(speakerOpen) "▾" else "▸"} Speaker name") }
                         if(speakerOpen && clip.text.isNotBlank()) {
@@ -220,13 +248,16 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
             if(page=="ask") {
                 item {
                     OutlinedTextField(question,{question=it},label={Text("Ask a question")},modifier=Modifier.fillMaxWidth())
-                    Button(onClick={repo.ask(question,selected)},enabled=state.modelsReady&&!state.asking&&question.isNotBlank()) { Text("Find answer") }
-                    Text(if(selected==null) "All conversations" else "This conversation",color=Mint,fontSize=12.sp)
+                    Button(onClick={repo.ask(question,selected,if(selected==null) dayStart else null,if(selected==null) dayEnd else null)},enabled=state.modelsReady&&!state.asking&&question.isNotBlank()) { Text("Find answer") }
+                    Text(if(selected==null) "${if(dayOffset==0) "Today" else "Yesterday"} conversations" else "This conversation",color=Mint,fontSize=12.sp)
                 }
-                items(state.answers,key={it.id}) { source -> RecallPanel {
-                    Text(source.text,color=Sand,fontSize=20.sp)
-                    Text("Transcript extract · source ${source.id}",color=Mint,fontSize=12.sp)
-                    TextButton(onClick={replay(source)}) { Text("▶ Replay source moment") }
+                items(state.answers) { answer -> RecallPanel {
+                    Text(answer.text,color=Sand,fontSize=20.sp)
+                    Text(if(answer.generated) "Generated from transcript · verify evidence below" else "Transcript extract · generation unavailable",color=Mint,fontSize=12.sp)
+                    answer.citations.forEach { citation ->
+                        Text("Source ${citation.source.id}: ${citation.quote}",color=Color(0xFFACC6BD),fontSize=13.sp)
+                        TextButton(onClick={replay(citation.source)}) { Text("▶ ${RecallConversation.clock(citation.source.start)} · Replay source ${citation.source.id}") }
+                    }
                 } }
             }
             if(page=="manage") {
