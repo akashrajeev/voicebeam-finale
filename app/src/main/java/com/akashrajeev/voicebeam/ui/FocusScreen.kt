@@ -50,6 +50,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -107,6 +114,9 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     var backCamera by rememberSaveable { mutableStateOf(true) }
     var videoBound by remember { mutableStateOf(false) }
     var showSheet by remember { mutableStateOf(false) }
+    var showConsent by remember { mutableStateOf(false) }
+    var boxSize by remember { mutableStateOf(IntSize.Zero) }
+    val dens = LocalDensity.current
     val demoFeed = BuildConfig.DEBUG && settings.debugFeed
     val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER; implementationMode = PreviewView.ImplementationMode.COMPATIBLE } }
     val analyzer = remember(demoFeed) { if (demoFeed) null else FaceAnalyzer(context.applicationContext, { t, faces, w, h -> engine.onFaces(t, faces, w, h) }, { engine.gestureIntervalMs() }, { t, hs -> engine.onHands(t, hs) }) }
@@ -195,7 +205,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     }
 
     Column(Modifier.fillMaxSize().background(Color.Black)) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxWidth().onSizeChanged { boxSize = it }) {
             // key() forces AndroidView to recreate when the feed flips; its factory
             // lambda only runs once, so without it the camera preview stays attached.
             if (!state.audioOnly) key(demoFeed) {
@@ -230,45 +240,98 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     val pad = (r - l) * 0.12f
                     val tl = Offset(l - pad, y1 - pad); val sz = GSize(r - l + 2 * pad, y2 - y1 + 2 * pad)
                     if (f.id == state.lockedId) {
-                        drawOval(Accent.copy(alpha = 0.10f), tl - Offset(14f, 14f), GSize(sz.width + 28f, sz.height + 28f), style = Stroke(14f))
+                        drawOval(Accent.copy(alpha = 0.14f), tl - Offset(16f, 16f), GSize(sz.width + 32f, sz.height + 32f), style = Stroke(16f))
+                        drawOval(Accent.copy(alpha = 0.30f), tl - Offset(7f, 7f), GSize(sz.width + 14f, sz.height + 14f), style = Stroke(1.5.dp.toPx()))
                         drawOval(Accent, tl, sz, style = Stroke(width = 3.dp.toPx() + f.speaking * 4.dp.toPx()))
                     } else if (f.id == state.consentFaceId && state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING) {
                         // Asking permission: faint full ring plus a ring that fills while a thumbs-up is held.
                         val grow = Offset(10f, 10f)
                         drawArc(Accent.copy(alpha = 0.25f), -90f, 360f, false, tl - grow, GSize(sz.width + 20f, sz.height + 20f), style = Stroke(8.dp.toPx()))
                         drawArc(Accent, -90f, 360f * state.consentProgress, false, tl - grow, GSize(sz.width + 20f, sz.height + 20f), style = Stroke(8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                    } else {
+                    } else if (state.lockedId == null) {
                         drawOval(Color.White.copy(alpha = 0.5f), tl, sz, style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 12f))))
                     }
                 }
             }
-            // Shading for legibility.
-            Box(Modifier.fillMaxWidth().height(260.dp).align(Alignment.BottomCenter)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)))))
+            // Shading for legibility (bottom only; the camera view stays normal).
+            Box(Modifier.fillMaxWidth().height(240.dp).align(Alignment.BottomCenter)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))))
 
-            // "Consent captured" pop-up for ~1.8 s after a lock with permission.
+            // Face positions in view pixels, shared by the tags and the thumbs-up badge.
+            val rects = if (boxSize.width > 0 && state.imageWidth > 0 && !state.audioOnly) {
+                val iw = state.imageWidth.toFloat(); val ih = state.imageHeight.toFloat()
+                val mapper = FillCenterMapper(iw, ih, boxSize.width.toFloat(), boxSize.height.toFloat(), state.mirrored)
+                val fitScale = minOf(boxSize.width / iw, boxSize.height / ih)
+                val fitOx = (boxSize.width - iw * fitScale) / 2f
+                val fitOy = (boxSize.height - ih * fitScale) / 2f
+                state.faces.map { f ->
+                    val (x1, y1) = if (demoFeed) Pair(fitOx + f.box.left * iw * fitScale, fitOy + f.box.top * ih * fitScale) else mapper.toView(f.box.left, f.box.top)
+                    val (x2, y2) = if (demoFeed) Pair(fitOx + f.box.right * iw * fitScale, fitOy + f.box.bottom * ih * fitScale) else mapper.toView(f.box.right, f.box.bottom)
+                    val l = minOf(x1, x2); val r = maxOf(x1, x2)
+                    val pad = (r - l) * 0.12f
+                    Triple(f.id, Offset(l - pad, y1 - pad), GSize(r - l + 2 * pad, y2 - y1 + 2 * pad))
+                }
+            } else emptyList()
+            val margin = with(dens) { 8.dp.toPx() }
+            val maxTagX = (boxSize.width - with(dens) { 130.dp.toPx() }).coerceAtLeast(margin)
+            val maxTagY = (boxSize.height - with(dens) { 330.dp.toPx() }).coerceAtLeast(margin)
+            for ((fid, tl, sz) in rects) {
+                val tx = tl.x.coerceIn(margin, maxTagX).roundToInt()
+                val ty = (tl.y + sz.height + margin).coerceIn(margin, maxTagY).roundToInt()
+                if (fid == state.lockedId) {
+                    Row(Modifier.offset { IntOffset(tx, ty) }.clip(RoundedCornerShape(99.dp)).background(Color(0xB3101519))
+                        .clickable { showConsent = true }.padding(horizontal = 10.dp, vertical = 5.dp).testTag("lock_tag"),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Lock, "locked", tint = Accent, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("You · locked", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                } else if (state.lockedId != null) {
+                    Text("Others", color = Color(0xFFE2E8EC), fontSize = 11.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.offset { IntOffset(tx, ty) }.clip(RoundedCornerShape(99.dp)).background(Color(0x99101519)).padding(horizontal = 9.dp, vertical = 4.dp))
+                }
+                if (fid == state.consentFaceId && state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING) {
+                    val bx = (tl.x + sz.width - with(dens) { 20.dp.toPx() }).coerceIn(margin, maxTagX).roundToInt()
+                    val by = (tl.y + sz.height - with(dens) { 30.dp.toPx() }).coerceIn(margin, maxTagY).roundToInt()
+                    val prog = state.consentProgress
+                    Box(Modifier.offset { IntOffset(bx, by) }.size(52.dp).clip(CircleShape).background(Color(0xB3101519)).testTag("thumb_badge"), contentAlignment = Alignment.Center) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            val w = 3.dp.toPx()
+                            drawArc(Color.White.copy(alpha = 0.2f), -90f, 360f, false, Offset(w / 2, w / 2), GSize(size.width - w, size.height - w), style = Stroke(w))
+                            drawArc(Accent, -90f, 360f * prog, false, Offset(w / 2, w / 2), GSize(size.width - w, size.height - w), style = Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                        }
+                        Icon(Icons.Filled.ThumbUp, "thumbs-up", tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+                }
+            }
+
+            // "Locked on you / Consent captured" toast for ~1.8 s after a lock with permission.
             var showCaptured by remember { mutableStateOf(false) }
             LaunchedEffect(state.consentCapturedAtMs) {
                 if (state.consentCapturedAtMs > 0L) { showCaptured = true; delay(1800); showCaptured = false }
             }
             val capScale by androidx.compose.animation.core.animateFloatAsState(
-                if (showCaptured) 1f else 0.5f,
-                androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 300f), label = "capScale")
+                if (showCaptured) 1f else 0.6f,
+                androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 300f), label = "capScale")
             val capAlpha by androidx.compose.animation.core.animateFloatAsState(if (showCaptured) 1f else 0f, label = "capAlpha")
             if (capAlpha > 0.01f) {
-                Box(Modifier.align(Alignment.Center).graphicsLayer { scaleX = capScale; scaleY = capScale; alpha = capAlpha }
-                    .background(Color(0xE6101519), RoundedCornerShape(20.dp)).padding(horizontal = 24.dp, vertical = 16.dp).testTag("consent_captured")) {
+                Box(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp)
+                    .graphicsLayer { scaleX = capScale; scaleY = capScale; alpha = capAlpha }
+                    .background(Color(0xE60F2A24), RoundedCornerShape(26.dp)).padding(horizontal = 18.dp, vertical = 12.dp).testTag("consent_captured")) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.CheckCircle, "consent captured", tint = Accent, modifier = Modifier.size(32.dp))
+                        Icon(Icons.Filled.CheckCircle, "consent captured", tint = Accent, modifier = Modifier.size(30.dp))
                         Spacer(Modifier.width(10.dp))
-                        Text("Consent captured", color = Color.White, fontSize = 20.sp)
+                        Column {
+                            Text("Locked on you", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text("Consent captured", color = Color(0xFFBEECDE), fontSize = 12.sp)
+                        }
                     }
                 }
             }
 
             // Top bar.
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Chip("On-device · offline", dot = Accent)
+                Chip("Private · on-device", dot = Accent, onClick = { showConsent = true })
                 Spacer(Modifier.width(8.dp))
                 if (state.recording.active) {
                     Chip("REC " + Captions.clock(nowTick - state.recording.startedAtMs), color = Color(0xCC2A0E0F), dot = RecRed, modifier = Modifier.testTag("rec"))
@@ -279,69 +342,49 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                 IconButton(onClick = { if (!state.recording.active) backCamera = !backCamera }) { Icon(Icons.Filled.Cameraswitch, "switch camera", tint = Color.White) }
             }
 
-            // Status + caption + controls.
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
-                Column(Modifier.fillMaxWidth().background(Color(0xE6101519), RoundedCornerShape(12.dp)).padding(10.dp)) {
-                    Text("ENH-6 | Enhancement, not overlapping-voice separation", color = Color.White, fontSize = 12.sp)
-                    Text(engine.enrollmentMessage(), color = Color.White, fontSize = 12.sp)
+            // Caption card + controls.
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                val notice = when {
+                    state.wearerEnrollmentActive -> "Learning your voice ${(state.wearerEnrollmentProgress * 100).roundToInt()}%"
+                    state.voiceEnrollmentActive -> "Learning their voice ${(state.voiceEnrollmentProgress * 100).roundToInt()}%"
+                    state.earphones == null && state.listening && !demoFeed -> "Connect media earphones for live audio"
+                    else -> null
                 }
-                StatusLine(state.lockedId != null, state.lockedSpeaking, state.voiceLearned, state.voiceMatch) { engine.unlock() }
-                if (state.consentMessage.isNotEmpty() || state.lockedId != null) {
-                    Text(
-                        when {
-                            state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING -> "Asking permission: " + state.consentMessage
-                            state.lockedId != null -> "Consent given. " + state.consentMessage + " (mouth movement match, not identity proof)"
-                            else -> state.consentMessage
-                        },
-                        color = Color.White, fontSize = 12.sp, modifier = Modifier.testTag("consent_status"),
-                    )
-                }
-                if (state.lockedId != null || state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING) {
-                    Button(onClick = { engine.withdrawConsent() }, modifier = Modifier.testTag("withdraw_consent")) { Text("Withdraw consent") }
-                }
-                if (state.consentRecords > 0) {
-                    androidx.compose.material3.TextButton(onClick = { engine.deleteConsentRecords() }) { Text("Delete consent records (${state.consentRecords})", fontSize = 12.sp) }
-                }
-                if (state.wearerEnrollmentActive) {
-                    Text("Learning YOUR voice ${(state.wearerEnrollmentProgress * 100).roundToInt()}%: only you speak. Target learning paused.", color = Muted, fontSize = 12.sp)
-                }
-                if (!state.wearerLearned && !state.wearerEnrollmentActive && !state.voiceEnrollmentActive) {
-                    Button(onClick = { engine.beginWearerEnrollment() }) { Text("Learn my voice (optional)") }
-                }
-                if (state.lockedId != null && !state.voiceLearned && !state.wearerEnrollmentActive) {
-                    Text(if (state.voiceEnrollmentActive)
-                        "Learning ${(state.voiceEnrollmentProgress * 100).roundToInt()}%: only the target speaks. Capture 9 seconds; pauses and lip dips will not reset it."
-                        else "Face locked, voice not learned. Ask the target to speak alone, then start voice learning.", color = Muted, fontSize = 12.sp)
-                    Button(onClick = { engine.beginTargetEnrollment() }) {
-                        Text(if (state.voiceEnrollmentActive) "Restart voice learning" else "Learn locked voice")
-                    }
-                }
-                if (state.earphones == null && state.listening && !demoFeed) {
-                    Text("Live audio needs a media earphone route (Bluetooth Media audio or wired/USB). Call-only SCO audio is not supported.", color = Muted, fontSize = 12.sp)
-                }
-                Spacer(Modifier.height(8.dp))
+                if (notice != null) { Chip(notice, color = Color(0xB3101519)); Spacer(Modifier.height(8.dp)) }
+                val asking = state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING
                 val latest = state.partial.ifBlank { state.segments.lastOrNull()?.text ?: "" }
                 val latestTarget = if (state.partial.isNotBlank()) state.partialIsTarget else state.segments.lastOrNull()?.isTarget ?: true
-                Text(
-                    if (state.audioError != null) "Audio stopped: ${state.audioError}. Go back and start again."
-                    else if (latest.isBlank()) (if (state.lockedId == null) "Tap a face to lock on. Captions appear here." else "Listening...") else latest,
-                    color = if (latest.isBlank()) Muted else if (latestTarget) Color.White else Color(0xFFB0B6BD),
-                    fontSize = 21.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, maxLines = 3,
-                    modifier = Modifier.testTag("caption"),
-                )
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(Color(0xB3101519)).padding(horizontal = 18.dp, vertical = 14.dp)) {
+                    if (asking) {
+                        Text("Permission to lock", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(6.dp))
+                        Text("Hold a thumbs-up by your face", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().testTag("consent_status"), textAlign = TextAlign.Center)
+                        Text("or say “I agree”", color = Color(0xFFCED8DE), fontSize = 15.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(if (latestTarget) Accent else Color(0xFFB0B6BD)))
+                            Spacer(Modifier.width(7.dp))
+                            Text(if (latestTarget) "You" else "Others", color = if (latestTarget) Accent else Color(0xFFB0B6BD), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.weight(1f))
+                            if (state.lockedId != null) Text("Others quieted", color = Color(0xFFDDE5EA), fontSize = 11.sp,
+                                modifier = Modifier.clip(RoundedCornerShape(99.dp)).background(Color(0x22FFFFFF)).padding(horizontal = 9.dp, vertical = 3.dp))
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (state.audioError != null) "Audio stopped: ${state.audioError}. Go back and start again."
+                            else if (latest.isBlank()) (if (state.lockedId == null) "Tap a face to lock on. Captions appear here." else "Listening...") else latest,
+                            color = if (latest.isBlank()) Muted else Color.White,
+                            fontSize = 21.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, maxLines = 3,
+                            modifier = Modifier.testTag("caption"),
+                        )
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 if (state.audioOnly) {
                     Text("Audio-only listen mode - camera off. Keep earphones connected; the phone microphone still needs to hear the person.", color = Accent, fontSize = 14.sp)
                     Button(onClick = { engine.exitAudioOnly() }) { Text("Back to camera") }
-                } else if (state.lockedId != null) {
-                    Text("Camera-free listening is not yet reliable across speakers. Keep the camera on for now.", color = Muted, fontSize = 12.sp)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Quiet others", color = Muted, fontSize = 13.sp)
-                    Slider(settings.quietOthers, { v -> engine.updateSettings { it.copy(quietOthers = v) } }, Modifier.weight(1f).padding(horizontal = 10.dp))
-                    Text("${(settings.quietOthers * 100).roundToInt()}%", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                }
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                     RoundButton(Modifier.testTag("captionMode"), { onNavigate(Screen.CAPTIONS) }) { Icon(Icons.Filled.TextFields, "caption mode", tint = Color.White) }
                     RecordButton(state.recording.active, state.recording.exporting) {
                         if (state.recording.active) engine.stopRecording()
@@ -367,6 +410,13 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
         BottomNav(Screen.FOCUS, onNavigate)
     }
 
+    if (showConsent) {
+        val cState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(onDismissRequest = { showConsent = false }, sheetState = cState, containerColor = Card) {
+            ConsentSheet(engine, state) { showConsent = false }
+        }
+    }
+
     if (showSheet) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(onDismissRequest = { showSheet = false }, sheetState = sheetState, containerColor = Card) {
@@ -379,16 +429,48 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
 }
 
 @Composable
-private fun StatusLine(locked: Boolean, speaking: Float, learned: Boolean, match: Float?, onUnlock: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun ConsentSheet(engine: VoiceBeamEngine, state: com.akashrajeev.voicebeam.engine.LiveState, onClose: () -> Unit) {
+    val locked = state.lockedId != null
+    val asking = state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
+        Text("Consent", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (locked) Accent.copy(alpha = 0.14f) else Card2).padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (locked) Icons.Filled.CheckCircle else Icons.Filled.Lock, null, tint = if (locked) Accent else Muted, modifier = Modifier.size(26.dp))
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(if (locked) "Permission given" else if (asking) "Waiting for permission" else "No one locked", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("Saved on this phone only", color = Muted, fontSize = 12.sp)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (locked || asking) androidx.compose.material3.OutlinedButton(onClick = { engine.withdrawConsent(); onClose() },
+                modifier = Modifier.weight(1f).testTag("withdraw_consent")) { Text("Withdraw consent", color = RecRed) }
+            if (state.consentRecords > 0) androidx.compose.material3.OutlinedButton(onClick = { engine.deleteConsentRecords() },
+                modifier = Modifier.weight(1f)) { Text("Delete records (${state.consentRecords})", color = Color.White) }
+        }
+        if (locked) androidx.compose.material3.TextButton(onClick = { engine.unlock(); onClose() }) { Text("Unlock", color = Muted) }
+        Spacer(Modifier.height(16.dp))
+        Text("Voice", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(10.dp))
         if (locked) {
-            Chip(if (speaking > 0.35f) "Speaking · locked" else "Locked", color = Accent.copy(alpha = 0.22f), dot = Accent)
-            Spacer(Modifier.width(8.dp))
-            Chip(if (learned) "Voice learned" + (match?.let { " · ${(it * 100).roundToInt()}%" } ?: "") else "Voice not learned", color = Card)
-            Spacer(Modifier.weight(1f))
-            Icon(Icons.Filled.LockOpen, "unlock", tint = Muted, modifier = Modifier.clip(CircleShape).clickable(onClick = onUnlock).padding(6.dp))
+            if (state.voiceLearned) Text("Locked voice learned", color = Accent, fontWeight = FontWeight.SemiBold)
+            Button(onClick = { engine.beginTargetEnrollment(); onClose() }, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                Text(if (state.voiceEnrollmentActive) "Restart voice learning" else if (state.voiceLearned) "Learn locked voice again" else "Learn locked voice")
+            }
+            if (state.voiceEnrollmentActive) Text("Learning ${(state.voiceEnrollmentProgress * 100).roundToInt()}%. The locked person speaks alone.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         } else {
-            Chip("No one locked · hearing everyone", color = Card)
+            Text("Lock a face to learn their voice.", color = Muted, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Learn my voice", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(if (state.wearerEnrollmentActive) "Learning ${(state.wearerEnrollmentProgress * 100).roundToInt()}%. Only you speak." else if (state.wearerLearned) "Learned" else "Optional, helps tell you apart", color = Muted, fontSize = 12.sp)
+            }
+            if (!state.wearerLearned && !state.wearerEnrollmentActive) androidx.compose.material3.OutlinedButton(onClick = { engine.beginWearerEnrollment(); onClose() }) { Text("Start", color = Accent) }
         }
     }
 }
