@@ -11,9 +11,12 @@ import com.akashrajeev.voicebeam.core.FootageAnalysis.Seg
 object FinalAudioGuardMath {
     const val MIN_SELECTED = 0.5f
     const val MIN_SPEECH = 0.5f
-    const val OUTPUT_MIN_COSINE = 0.4f
+    // Recalibrated on a 10-case LAPTOP distribution with the TitaNet-small port (data-thin; revisit with device renders).
+    // Honest outputs 0.371..0.767 (incl. dashcam 0.471); true fails 0.293 / 0.137. Rule 2 arms at source cos >= 0.6 and fires on gap s-o > 0.45
+    // (venue 0.529 fires; honest gaps 0.236..0.373 clear). Was 0.4 / 0.6 / 0.15. Reference is NOT bandlimited (that was tested and disqualified).
+    const val OUTPUT_MIN_COSINE = 0.35f
     const val HOMOGENEOUS_SOURCE_COSINE = 0.6f
-    const val MAX_HOMOGENEOUS_LOSS = 0.15f
+    const val MAX_HOMOGENEOUS_LOSS = 0.45f
 
     fun selectedFraction(labels: Array<Seg>, a: Int, b: Int, sampleRate: Int = 16000): Float {
         require(a in 0 until b) { "bad chunk" }
