@@ -29,9 +29,9 @@ class FootageRenderPipelineTest {
         val r = FootageRenderPipeline.run(source, extracted, null, labels, voiced())
         assertTrue("expected Rendered, got " + ((r as? RenderOutcome.Rejected)?.gates?.failures), r is RenderOutcome.Rendered)
         val out = (r as RenderOutcome.Rendered).audio
-        // other-only bins ducked about -18 dB vs source
+        // other-only bins ducked about -30 dB vs source (default focus)
         val a = sr; val b = 2 * sr - 1000
-        assertTrue(RoutedRender.rms(out, a + 1000, b) < RoutedRender.rms(source, a + 1000, b) * 0.2f)
+        assertTrue(RoutedRender.rms(out, a + 1000, b) < RoutedRender.rms(source, a + 1000, b) * 0.05f)
         // none bins near silent
         assertTrue(RoutedRender.rms(out, 3 * sr + 2000, 4 * sr - 100) < RoutedRender.rms(source, 3 * sr + 2000, 4 * sr - 100) * 0.05f)
     }
@@ -64,11 +64,17 @@ class FootageRenderPipelineTest {
 
     @Test fun noneMaskIsSampleExactInsideNoneBins() {
         val x = FloatArray(n) { 0.3f }
-        val out = RoutedRender.applyNoneMask(x, labels, sr)
-        for (i in 3 * sr until n) assertEquals(0f, out[i], 0f)
+        val out = RoutedRender.applyNoneMask(x, x, labels, sr)
+        for (i in 3 * sr until n) assertEquals(0.3f * RoutedRender.NONE_GAIN, out[i], 1e-6f)   // exactly 0.04 x source, never digital zero
         assertEquals(0.3f, out[3 * sr - sr / 10], 1e-6f)          // far from the edge: untouched
-        assertTrue(out[3 * sr - 1] < 0.01f)                          // fade ends at the boundary
+        assertEquals(0.3f * RoutedRender.NONE_GAIN, out[3 * sr - 1], 0.3f * 0.04f)   // fade ends at the boundary
         assertTrue(RoutedRender.maxStep(out) < 0.01f)                // no click
+    }
+    @Test fun noneBinsAreNeverDigitalZero() {
+        val x = FloatArray(n) { 0.01f * (if (it % 2 == 0) 1f else -1f) }
+        val out = RoutedRender.applyNoneMask(x, x, labels, sr)
+        assertTrue(RoutedRender.rms(out, 3 * sr + 100, n - 100) > 1e-4f)
+        assertTrue(RoutedRender.rms(out, 3 * sr + 100, n - 100) <= RoutedRender.rms(x, 3 * sr + 100, n - 100) * 0.05f)
     }
     @Test fun hardMuteBeatsVadContext() {
         val x = FloatArray(4096) { 0.2f }
@@ -80,7 +86,9 @@ class FootageRenderPipelineTest {
 
     @Test fun extractorEnergyInOtherSpeakerBinsIsRejected() {
         // hallucinated target audio in OTHER_ONLY bins is pulled into the neighbouring crossfade; the strict band gate must catch it
-        val extracted = FloatArray(n) { tone(500.0, 0.28f, it) }
+        // At the -30 dB default a 0.28-amplitude leak is only about 0.5 dB over the band cap (measured in the numpy port), under the 1 dB gate, so the
+        // fixture injects a full-scale leak: about 10 dB over the cap at -30 and about 15 dB at -18, a decisive failure at either default.
+        val extracted = FloatArray(n) { tone(500.0, 1.0f, it) }
         val r = FootageRenderPipeline.run(source, extracted, null, labels, voiced())
         assertTrue(r is RenderOutcome.Rejected)
     }
