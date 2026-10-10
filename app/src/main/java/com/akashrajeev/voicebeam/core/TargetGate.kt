@@ -104,11 +104,14 @@ class TargetGate(
             state == TargetState.TARGET && i.voiceActive -> strict.hangoverMs
             else -> (strictHoldLeft - frameMs).coerceAtLeast(0f)
         }
+        val fullStrict = strict.strictEnabled && strict.strictFull && i.hasLock && i.voiceLearned
+        val fullResidual = fullStrict && state != TargetState.TARGET &&
+            state != TargetState.OTHER && strictHoldLeft <= 0f
         val strictResidual = strict.strictEnabled && i.hasLock && i.voiceLearned &&
             i.voiceActive && state == TargetState.UNCERTAIN && strictHoldLeft <= 0f
         val confirmed = !i.hasLock || ((i.audioOnly || i.lockedVisible) &&
             ((i.voiceLearned && i.voiceActive && state == TargetState.TARGET) ||
-                (i.voiceLearned && !i.voiceActive && holdLeft > 0f)))
+                (i.voiceLearned && !i.voiceActive && (if (fullStrict) strictHoldLeft > 0f else holdLeft > 0f))))
         // Provisional general monitor for a visible, not-yet-learned lock.
         // This does not attribute speech to the target or lower the gate gain.
         val provisional = i.hasLock && !i.voiceLearned && !i.audioOnly &&
@@ -120,13 +123,16 @@ class TargetGate(
         val residual = maxOf(0.02f, (1f - strength) * (1f - strength))
         val wanted = when {
             !i.hasLock -> 1f
+            fullStrict && state == TargetState.OTHER -> residual // preserve explicit OTHER policy
+            fullResidual -> strict.residualGain // includes quiet, music, overlap and face loss
+            fullStrict && strictHoldLeft > 0f && state != TargetState.TARGET -> 1f
             confirmed -> 1f - strength * (1f - probability)
             strictResidual -> strict.residualGain
             state == TargetState.UNCERTAIN -> 1f // safe unboosted enhancement passthrough
             state == TargetState.OVERLAP && i.voiceActive -> 1f // cannot separate, preserve speech
             else -> residual
         }
-        val tau = if (wanted > gain) attackMs else if (strictResidual) strict.releaseMs else releaseMs
+        val tau = if (wanted > gain) attackMs else if (strictResidual || fullResidual) strict.releaseMs else releaseMs
         val alpha = 1f - exp(-frameMs / tau)
         gain += (wanted - gain) * alpha
         return gain
