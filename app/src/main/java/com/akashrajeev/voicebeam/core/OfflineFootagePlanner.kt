@@ -1,6 +1,6 @@
 package com.akashrajeev.voicebeam.core
 
-enum class AbstainReason { NO_CLUSTER, SINGLE_CLUSTER, TAP_REQUIRED, TAP_NOT_IN_CLUSTER, REFERENCE_TOO_SHORT, LIP_AMBIGUOUS }
+enum class AbstainReason { NO_CLUSTER, SINGLE_CLUSTER, TAP_REQUIRED, TAP_NOT_IN_CLUSTER, REFERENCE_TOO_SHORT, LIP_AMBIGUOUS, GUARD_REJECTED }
 enum class TargetSource { TAP, FACE }
 
 sealed class PlanResult {
@@ -18,6 +18,8 @@ object OfflineFootagePlanner {
     const val MIN_TAP_SEC = 2f
     const val MIN_TAP_WINDOWS = 2
     const val MIN_TAP_SHARE = 0.5f
+    /** Winner must beat the runner-up by at least this share of the windows inside the tap; ties or near-ties abstain. */
+    const val MIN_TAP_MARGIN = 0.2f
 
     fun plan(
         ws: List<WindowEmbedding>, durationSec: Float,
@@ -25,18 +27,22 @@ object OfflineFootagePlanner {
         lipBinned: FloatArray? = null, otherLipBinned: List<FloatArray> = emptyList(),
         lipOnThreshold: Float = 0.5f, othersOffThreshold: Float = 0.3f
     ): PlanResult {
+        // Tap validation runs BEFORE any abstain so a malformed tap is always a caller error, never masked by NO_CLUSTER.
+        if (tap != null) require(tap.startSec.isFinite() && tap.endSec.isFinite() && tap.startSec >= 0f && tap.endSec > tap.startSec && tap.endSec <= durationSec) { "tap outside audio" }
         val ca = ClusteredAnalysis.of(ws, durationSec)
         if (ca.clusterCount == 0) return PlanResult.Abstain(AbstainReason.NO_CLUSTER)
 
         if (tap != null) {
-            require(tap.startSec.isFinite() && tap.endSec.isFinite() && tap.startSec >= 0f && tap.endSec > tap.startSec && tap.endSec <= durationSec) { "tap outside audio" }
             if (tap.endSec - tap.startSec < MIN_TAP_SEC) return PlanResult.Abstain(AbstainReason.REFERENCE_TOO_SHORT)
             val clusters = ca.windowClusters()
             val inside = ws.indices.filter { ws[it].startSec >= tap.startSec && ws[it].endSec <= tap.endSec }
             val valid = inside.filter { clusters[it] >= 0 }
             if (inside.size < MIN_TAP_WINDOWS || valid.size < MIN_TAP_WINDOWS) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
             val counts = valid.groupingBy { clusters[it] }.eachCount()
-            val best = counts.maxByOrNull { it.value }!!
+            val ranked = counts.entries.sortedByDescending { it.value }
+            val best = ranked[0]
+            val runnerUp = if (ranked.size > 1) ranked[1].value else 0
+            if ((best.value - runnerUp).toFloat() / inside.size < MIN_TAP_MARGIN) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
             if (best.value.toFloat() / inside.size < MIN_TAP_SHARE) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
             // Routed render needs other speakers to separate from; one cluster gives no such evidence.
             if (ca.clusterCount < 2) return PlanResult.Abstain(AbstainReason.SINGLE_CLUSTER)
