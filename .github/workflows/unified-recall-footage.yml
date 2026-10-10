@@ -1,5 +1,5 @@
 name: Unified Recall and footage port validation
-# Idle-only stereo microphone diagnostic candidate
+# Self-contained stereo diagnostic panel layout
 on:
   push:
     branches: [exp-13-recall-gemma]
