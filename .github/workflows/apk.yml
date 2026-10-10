@@ -2,7 +2,7 @@ name: ENH-6-consent-apk
 # ENH-6: safe enhancement and enrollment. Bluetooth unchanged.
 on:
   push:
-    branches: [revised-ui-2026-10-11]
+    branches: [denoise-arch-2026-10-11]
     paths: ['.github/workflows/apk.yml']
 permissions:
   contents: read

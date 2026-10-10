@@ -82,7 +82,8 @@ class NeuralVad(assets: AssetManager) {
 }
 
 /** Real-time noise removal (GTCRN). */
-class Denoiser(assets: AssetManager) {
+class Denoiser(assets: AssetManager) : com.akashrajeev.voicebeam.core.SpeechEnhancer {
+    override val id: String get() = "gtcrn"
     private val impl = OnlineSpeechDenoiser(
         assetManager = assets,
         config = OnlineSpeechDenoiserConfig(
@@ -93,12 +94,12 @@ class Denoiser(assets: AssetManager) {
         ),
     )
 
-    val frameShift: Int get() = impl.frameShiftInSamples
+    override val frameShift: Int get() = impl.frameShiftInSamples
 
-    fun process(samples: FloatArray): FloatArray = impl.run(samples, SAMPLE_RATE).samples
+    override fun process(frame: FloatArray): FloatArray = impl.run(frame, SAMPLE_RATE).samples
 
-    fun reset() = impl.reset()
-    fun release() = impl.release()
+    override fun reset() = impl.reset()
+    override fun release() = impl.release()
 }
 
 /** Voice fingerprint (CAM++ speaker embedding). */

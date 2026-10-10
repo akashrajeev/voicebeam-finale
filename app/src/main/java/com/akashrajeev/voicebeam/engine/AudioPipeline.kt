@@ -46,6 +46,8 @@ class AudioPipeline(
     var enrollmentStatus: () -> String = { "unknown" }
     @Volatile var quietOthers = 0.8f
     @Volatile var boostDb = 6f
+    /** Which enhancer feeds the audio path. Only "gtcrn" (local, default) ships; others come from EnhancerRegistry. */
+    @Volatile var enhancerId: String = com.akashrajeev.voicebeam.core.EnhancerRegistry.DEFAULT_ID
     @Volatile var denoiseMix = .8f          // 0 = raw, 1 = fully denoised
     @Volatile var monitorEnabled = true    // hard-limited to an actual headphone route
     @Volatile var rawWriter: WavWriter? = null
@@ -156,6 +158,9 @@ class AudioPipeline(
         val denoiseIn = FloatArray(frameShift)
         val envelope = com.akashrajeev.voicebeam.core.ListenEnvelope(SAMPLE_RATE)
         val alignment = DenoiseAlignment(maxOf(4096, frameShift * 8))
+        // Local GTCRN is always the fallback. A chosen provider is used only while it behaves.
+        val slot = com.akashrajeev.voicebeam.core.EnhancerSlot(models.denoiser, com.akashrajeev.voicebeam.core.EnhancerRegistry.create(enhancerId), onEvent = { Diagnostics.event(it) })
+        var slotGeneration = slot.generation
         var clean = FloatArray(frameShift)
         var gated = FloatArray(frameShift)
         var out = FloatArray(frameShift)
@@ -172,7 +177,7 @@ class AudioPipeline(
             // Never use connected/preferred device as permission to send live microphone audio.
             track?.write(silence, 0, silence.size, AudioTrack.WRITE_BLOCKING)
             track?.play()
-            models.denoiser.reset()
+            slot.reset()
             gate.reset()
             var fedFrames = 0L
             val feedStart = SystemClock.uptimeMillis()
@@ -201,8 +206,13 @@ class AudioPipeline(
                 val denoiseStart = SystemClock.elapsedRealtimeNanos()
                 System.arraycopy(input, 0, denoiseIn, 0, input.size)
                 alignment.push(input)
-                val denoised = try { models.denoiser.process(denoiseIn) } catch (t: Throwable) {
+                val denoised = try { slot.process(denoiseIn) } catch (t: Throwable) {
                     alignment.reset(); alignment.push(input); input
+                }
+                if (slot.generation != slotGeneration) {
+                    // The enhancer changed (provider dropped): its delay differs, so realign the raw buffer.
+                    slotGeneration = slot.generation
+                    alignment.reset(); alignment.push(input)
                 }
                 val n = minOf(denoised.size, input.size)
                 val mix = denoiseMix
@@ -294,6 +304,7 @@ class AudioPipeline(
                 }
             }
         } finally {
+            slot.release()
             try { rec?.stop() } catch (_: Throwable) {}
             rec?.release()
             try { track?.stop() } catch (_: Throwable) {}
