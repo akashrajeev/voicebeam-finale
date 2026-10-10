@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Preserve original audio-routing capability; normal permission, no runtime prompt. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- INTERNET is needed only to open the local Stage Server socket (port 8765). The app makes no outgoing web requests, so cleartext traffic is off. -->
+    <!-- INTERNET is needed only to open the local Stage Server socket (port 8765). Outgoing requests are optional (Groq captions, ElevenLabs clip clean), HTTPS only, and cleartext traffic is off. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

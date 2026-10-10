@@ -24,6 +24,7 @@ data class SessionMeta(
     val video: File get() = File(dir, "video.mp4")
     val cleanAudio: File get() = File(dir, "clean.m4a")
     val cleanWav: File get() = File(dir, "clean.wav")
+    val cloudClean: File get() = File(dir, "cloud_clean.mp3")
     val rawWav: File get() = File(dir, "raw.wav")
     val srt: File get() = File(dir, "captions.srt")
     val txt: File get() = File(dir, "transcript.txt")

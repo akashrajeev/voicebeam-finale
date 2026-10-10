@@ -16,6 +16,8 @@ data class Settings(
     val onboarded: Boolean = false,
     val hd1080: Boolean = false,
     val debugFeed: Boolean = false,
+    val cloudClean: Boolean = false,    // optional: send a saved clip to ElevenLabs to clean it. Off by default.
+    val cloudCapMinutes: Int = 8,       // monthly cap on cloud minutes
 )
 
 class SettingsStore(context: Context) {
@@ -35,6 +37,8 @@ class SettingsStore(context: Context) {
         onboarded = p.getBoolean("onboarded", false),
         hd1080 = p.getBoolean("hd1080", false),
         debugFeed = p.getBoolean("dbgFeed", false),
+        cloudClean = p.getBoolean("cloudClean", false),
+        cloudCapMinutes = p.getInt("cloudCap", 8).coerceIn(1, 60),
     )
 
     fun save(s: Settings) {
@@ -43,6 +47,7 @@ class SettingsStore(context: Context) {
             .putBoolean("sceneMic", s.useSceneMic).putString("saveMode", s.saveMode.name).putString("burn", s.captionBurn.name)
             .putBoolean("others", s.showOthersCaptions).putBoolean("raw", s.keepRawAudio).putBoolean("stage", s.stageEnabled)
             .putInt("capSize", s.captionSize).putBoolean("onboarded", s.onboarded).putBoolean("hd1080", s.hd1080).putBoolean("dbgFeed", s.debugFeed)
+            .putBoolean("cloudClean", s.cloudClean).putInt("cloudCap", s.cloudCapMinutes)
             .apply()
     }
 }

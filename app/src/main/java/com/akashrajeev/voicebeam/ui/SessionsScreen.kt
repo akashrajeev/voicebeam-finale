@@ -6,6 +6,9 @@ import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
 import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -62,6 +65,10 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     var renaming by remember { mutableStateOf<SessionMeta?>(null) }
     var deleting by remember { mutableStateOf<SessionMeta?>(null) }
     var playing by remember { mutableStateOf<String?>(null) }
+    val settings by engine.settings.collectAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var cloudBusy by remember { mutableStateOf<String?>(null) }
+    var cloudDone by remember { mutableStateOf(0) }
     val player = remember { mutableStateOf<MediaPlayer?>(null) }
     LaunchedEffect(Unit) { engine.refreshSessions() }
     DisposableEffect(Unit) { onDispose { player.value?.release(); player.value = null } }
@@ -110,6 +117,16 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (m.video.exists()) Chip("▶ Play video", color = Card2) { openFile(context, m.video, "video/mp4") }
                                 if (m.cleanAudio.exists()) Chip(if (playing == m.id + "c") "■ Stop" else "▶ Clean", color = Card2) { play(m.cleanAudio, m.id + "c") }
+                                if (settings.cloudClean && cloudBusy == m.id) Chip("Cleaning in cloud...", color = Card2)
+                                else if (settings.cloudClean && m.cleanWav.exists() && !m.cloudClean.exists()) Chip("☁ Clean in cloud (sends audio)", color = Card2) {
+                                    cloudBusy = m.id
+                                    scope.launch {
+                                        val msg = withContext(Dispatchers.IO) { com.akashrajeev.voicebeam.cloud.CloudClean.cleanSession(context, m, settings.cloudClean, settings.cloudCapMinutes) }
+                                        cloudBusy = null; cloudDone++
+                                        Toast.makeText(context, msg ?: "Cloud clean saved.", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                                if (cloudDone >= 0 && m.cloudClean.exists()) Chip(if (playing == m.id + "w") "■ Stop" else "▶ Cloud clean", color = Card2) { play(m.cloudClean, m.id + "w") }
                                 if (m.rawWav.exists()) Chip(if (playing == m.id + "r") "■ Stop" else "▶ Raw", color = Card2) { play(m.rawWav, m.id + "r") }
                             }
                             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

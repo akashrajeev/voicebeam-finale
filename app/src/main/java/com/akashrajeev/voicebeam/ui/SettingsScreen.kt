@@ -118,6 +118,30 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                 }) { Text("Clear key") }
             }
             if (keyMessage.isNotEmpty()) Text(keyMessage, color = Muted, fontSize = 12.sp)
+            SectionHeader("Cloud clean (ElevenLabs, optional)")
+            Text("Sends audio to ElevenLabs. Off by default. Needs internet, so it is not on-device. It only cleans a saved clip when you tap Clean in cloud on the Sessions screen; live listening always stays on this phone. ElevenLabs may keep uploaded audio under its own privacy policy. Free ElevenLabs credits are small (about 10 minutes a month). If you are offline or over the cap, VoiceBeam keeps the on-device clean audio.", color = Muted, fontSize = 12.sp)
+            SwitchRow("Cloud clean saved clips", "Sends audio to ElevenLabs", s.cloudClean) { v -> engine.updateSettings { it.copy(cloudClean = v) } }
+            val cloudVault = remember { com.akashrajeev.voicebeam.cloud.CloudKeyVault(context) }
+            var cloudKeySet by remember { mutableStateOf(cloudVault.has()) }
+            var cloudKeyInput by remember { mutableStateOf("") }
+            var cloudKeyMessage by remember { mutableStateOf("") }
+            val usedMin = remember(s.cloudClean, cloudKeySet, cloudKeyMessage) { com.akashrajeev.voicebeam.cloud.CloudClean.ledger(context).usedSeconds() / 60f }
+            SliderRow("Monthly cloud cap", "${s.cloudCapMinutes} min", s.cloudCapMinutes.toFloat(), 1f..10f) { v -> engine.updateSettings { it.copy(cloudCapMinutes = v.roundToInt().coerceIn(1, 10)) } }
+            Text("Used this month: ${"%.1f".format(usedMin)} min", color = Muted, fontSize = 12.sp)
+            Text(if (cloudKeySet) "ElevenLabs key: set (stored encrypted on this phone)" else "ElevenLabs key: not set", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+            OutlinedTextField(
+                value = cloudKeyInput, onValueChange = { cloudKeyInput = it }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(), textStyle = TextStyle(color = Color.White),
+                label = { Text("Paste ElevenLabs API key", color = Muted) }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
+            Row {
+                Button(onClick = {
+                    val ok = cloudVault.save(cloudKeyInput)
+                    cloudKeySet = ok && cloudVault.has(); cloudKeyInput = ""
+                    cloudKeyMessage = if (ok) "Saved." else "That does not look like a key."
+                }) { Text("Save key") }
+                Button(onClick = { cloudVault.clear(); cloudKeySet = false; cloudKeyInput = ""; cloudKeyMessage = "Key removed." }) { Text("Clear key") }
+            }
+            if (cloudKeyMessage.isNotEmpty()) Text(cloudKeyMessage, color = Muted, fontSize = 12.sp)
             SectionHeader("Live diagnostics")
             Text("Local technical logs only. No audio, captions or uploads. Share sends a text file only when you choose an app.", color = Muted, fontSize = 12.sp)
             Row {
@@ -138,7 +162,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             }
             Text(diagnosticText.lines().takeLast(12).joinToString("\n"), color = Muted, fontSize = 10.sp)
             SectionHeader("Privacy")
-            Text("Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account. Network use is the optional stage-caption page on your own Wi-Fi and, only if you add a Groq key, the audio of finished sentences sent to Groq for captions.",
+            Text("Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account. Network use is the optional stage-caption page on your own Wi-Fi and, only if you add a Groq key, the audio of finished sentences sent to Groq for captions, and, only if you turn on Cloud clean and add an ElevenLabs key, the saved clip you choose to clean sent to ElevenLabs.",
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
             ValueRow("Version", BuildConfig.VERSION_NAME)
         }
