@@ -38,6 +38,8 @@ class FinalAudioGuardMathTest {
         assertFalse(FinalAudioGuardMath.pass(0.666f, 0.137f, 3))      // venue-like true fail (rule 2: gap .529)
         assertFalse(FinalAudioGuardMath.pass(0.347f, 0.293f, 3))      // clip2-like true fail (rule 1)
         assertFalse(FinalAudioGuardMath.pass(0.5f, 0.210f, 3))        // clip7-like weak fallback (rule 1)
+        assertTrue(FinalAudioGuardMath.pass(0.5f, 0.352f, 3))         // honest minimum
+        assertFalse(FinalAudioGuardMath.pass(0.5f, 0.269f, 3))        // noisy-reference true fail
     }
     @Test(expected = IllegalArgumentException::class) fun labelsMustCoverChunk() {
         FinalAudioGuardMath.selectedFraction(six(Seg.NONE), 0, 48000)
