@@ -37,7 +37,7 @@ class AudioPipeline(
     private val onError: (Throwable) -> Unit = {},
     private val onFrame: (FrameInfo) -> Unit,
 ) {
-    data class FrameInfo(val level: Float, val gain: Float, val probability: Float, val voiceActive: Boolean, val monitorRoute: String?)
+    data class FrameInfo(val level: Float, val gain: Float, val probability: Float, val voiceActive: Boolean, val monitorRoute: String?, val spatialStatus: String = "disabled")
     data class CaptionBlock(val samples: FloatArray, val captureMs: Long, val probability: Float, val voiceActive: Boolean)
     private var capturedSamples = 0L
     val droppedCaptionBlocks: Long get() = asrQueue.dropped
@@ -46,6 +46,8 @@ class AudioPipeline(
     @Volatile var matcherDenoised = false
     var enrollmentActive: () -> Boolean = { false }
     var enrollmentStatus: () -> String = { "unknown" }
+    @Volatile var soloNoiseFocus = false
+    @Volatile var spatialEnabled = false
     @Volatile var quietOthers = 0.8f
     @Volatile var boostDb = 6f
     @Volatile var denoiseMix = .8f          // 0 = raw, 1 = fully denoised
@@ -114,22 +116,54 @@ class AudioPipeline(
         Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
         val frameShift = models.denoiser.frameShift.takeIf { it > 0 } ?: 256
         val dbg = debugFeed
+        var stereoCapture = false
+        var captureStatus = "mono fallback"
+        fun openRecord(source: Int, rate: Int, mask: Int, bytes: Int): AudioRecord? {
+            val minimum = AudioRecord.getMinBufferSize(rate, mask, AudioFormat.ENCODING_PCM_FLOAT)
+            if (minimum <= 0) return null
+            return try {
+                AudioRecord(source, rate, mask, AudioFormat.ENCODING_PCM_FLOAT,
+                    maxOf(minimum, bytes)).let {
+                    if (it.state == AudioRecord.STATE_INITIALIZED) it else { it.release(); null }
+                }
+            } catch (_: Throwable) { null }
+        }
+        // One capture only. MIC 48k is experimental; duplicate-channel detection gates its use.
         val rec = if (dbg != null) null else {
-            val minRec = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-            val source = if (useSceneMic) MediaRecorder.AudioSource.CAMCORDER else MediaRecorder.AudioSource.VOICE_RECOGNITION
-            try {
-                AudioRecord(source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT, maxOf(minRec, frameShift * 8))
-            } catch (t: Throwable) {
-                AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT, maxOf(minRec, frameShift * 8))
+            val spatial = if (spatialEnabled) openRecord(MediaRecorder.AudioSource.MIC, 48000,
+                AudioFormat.CHANNEL_IN_STEREO, frameShift * 6 * 4 * 4) else null
+            if (spatial != null) {
+                stereoCapture = true; captureStatus = "MIC stereo 48k"; spatial
+            } else {
+                val source = if (useSceneMic) MediaRecorder.AudioSource.CAMCORDER else MediaRecorder.AudioSource.VOICE_RECOGNITION
+                openRecord(source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, frameShift*4*8)
+                    ?: openRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE,
+                        AudioFormat.CHANNEL_IN_MONO, frameShift*4*8)
+                    ?: error("Microphone could not initialize")
             }
         }
-        if (rec != null && Build.VERSION.SDK_INT >= 29) {
-            try {
-                rec.setPreferredMicrophoneDirection(
-                    if (useSceneMic) MicrophoneDirection.MIC_DIRECTION_AWAY_FROM_USER else MicrophoneDirection.MIC_DIRECTION_UNSPECIFIED
-                )
-            } catch (_: Throwable) {}
+        Diagnostics.event("spatial_capture=" + captureStatus)
+        val phoneMoving = java.util.concurrent.atomic.AtomicBoolean(false)
+        val motionAt = java.util.concurrent.atomic.AtomicLong(0L)
+        val sensors = app.getSystemService(android.content.Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        val gyro = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE)
+        val motionListener = object : android.hardware.SensorEventListener {
+            override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+            override fun onSensorChanged(event: android.hardware.SensorEvent) {
+                if (event.values.take(3).any { kotlin.math.abs(it) > .15f }) {
+                    motionAt.set(SystemClock.uptimeMillis()); phoneMoving.set(true)
+                }
+            }
         }
+        val motionRegistered = stereoCapture && gyro != null &&
+            sensors.registerListener(motionListener, gyro, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+        Diagnostics.event("spatial_motion_sensor=" + motionRegistered)
+        val spatialFocus = com.akashrajeev.voicebeam.core.SpatialFocus()
+        val downsample = com.akashrajeev.voicebeam.core.StereoDownsample()
+        val stereoInput = FloatArray(frameShift*6)
+        var spatialCue = com.akashrajeev.voicebeam.core.SpatialCue()
+        var spatialStatus = captureStatus
+        var previousSpatialRoute: Int? = null
         val track = if (dbg != null) null else {
             val minPlay = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
             AudioTrack.Builder()
@@ -197,7 +231,13 @@ class AudioPipeline(
         try {
             check(rec == null || rec.state == AudioRecord.STATE_INITIALIZED) { "Microphone could not initialize" }
             check(track == null || track.state == AudioTrack.STATE_INITIALIZED) { "Playback could not initialize" }
-            rec?.startRecording()
+            try { rec?.startRecording() } catch (t: Throwable) {
+                // Initialization does not prove capture. Fail explicitly; no silent spatial claim.
+                error("$captureStatus start failed: ${t.javaClass.simpleName}")
+            }
+            if (rec != null) Diagnostics.event("spatial_route_type=" + rec.routedDevice?.type +
+                " channels=" + rec.channelCount + " rate=" + rec.sampleRate +
+                " active_mics=" + runCatching { rec.activeMicrophones.size }.getOrDefault(-1))
             check(rec == null || rec.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start" }
             // Prime with SILENCE only. A real route may not exist until the track consumes data.
             // Never use connected/preferred device as permission to send live microphone audio.
@@ -217,14 +257,25 @@ class AudioPipeline(
                     val wait = due - SystemClock.uptimeMillis()
                     if (wait > 0) Thread.sleep(wait)
                 } else {
+                    val capture = if (stereoCapture) stereoInput else input
                     var read = 0
-                    while (read < frameShift && running.get()) {
-                        val n = rec!!.read(input, read, frameShift - read, AudioRecord.READ_BLOCKING)
+                    while (read < capture.size && running.get()) {
+                        val n = rec!!.read(capture, read, capture.size - read, AudioRecord.READ_BLOCKING)
                         if (n < 0) error("Microphone read failed: $n")
                         if (n == 0) break
                         read += n
                     }
-                    if (read < frameShift) continue
+                    if (read < capture.size) continue
+                    if (stereoCapture) {
+                        val routeId = rec!!.routedDevice?.id
+                        if (routeId != previousSpatialRoute) {
+                            spatialFocus.reset(); previousSpatialRoute = routeId
+                        }
+                        downsample.process(stereoInput, input)
+                        spatialCue = if (rec!!.routedDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_MIC)
+                            com.akashrajeev.voicebeam.core.StereoTiming.estimate(stereoInput)
+                        else com.akashrajeev.voicebeam.core.SpatialCue(reason = "not built-in mic")
+                    }
                 }
                 capturedSamples += input.size
                 rawWriter?.write(input)
@@ -279,10 +330,22 @@ class AudioPipeline(
                 gate.tuning = gateTuning.sanitized()
                 val observation = com.akashrajeev.voicebeam.core.SpeechObservation.observe(
                     enrollmentActive(), voice, rawRms, s)
-                val g = gate.process(observation.inputs)
+                val moving = phoneMoving.getAndSet(false) ||
+                    (motionAt.get() > 0 && SystemClock.uptimeMillis()-motionAt.get() < 700)
+                if (moving) spatialFocus.reset()
+                val agreement = if (stereoCapture && !moving) spatialFocus.update(spatialCue,
+                    observation.inputs, SystemClock.uptimeMillis(), frameShift*1000f/SAMPLE_RATE) else null
+                spatialStatus = if (stereoCapture) "$captureStatus: ${spatialFocus.status}; cue=${spatialCue.lagSamples}, corr=${spatialCue.correlation}, margin=${spatialCue.uniqueness}; vote=$agreement"
+                    else captureStatus
+                val g = gate.process(observation.inputs.copy(spatialAgreement = agreement))
+                if (moving) spatialStatus = "$captureStatus: phone moved; recalibration required"
                 val gateEnd = SystemClock.elapsedRealtimeNanos()
                 // Use the existing aligned dry branch. Policy changes hearing, not attribution.
-                val mix = if (dfn != null && denoiseMix > 0f) 1f else hearingMix.next(denoiseMix, observation.inputs, gate.state, n)
+                val soloConfirmed = soloNoiseFocus &&
+                    com.akashrajeev.voicebeam.core.SoloTargetPolicy.confirmed(observation.inputs, agreement)
+                val hearingRequest = com.akashrajeev.voicebeam.core.SoloTargetPolicy.mix(denoiseMix, soloConfirmed)
+                val mix = if (dfn != null && hearingRequest > 0f) 1f else hearingMix.next(hearingRequest, observation.inputs, gate.state, n)
+                if (soloNoiseFocus) spatialStatus += "; soloNoiseFocus=$soloConfirmed wet=$mix"
                 alignment.mix(denoised, mix, clean, n)
                 if (dfn != null && denoiseMix == 0f) input.copyInto(clean, endIndex=n)
                 val cleanVadStart = SystemClock.elapsedRealtimeNanos()
@@ -359,6 +422,7 @@ class AudioPipeline(
                         " gateUs=" + (gateEnd - gateStart) / 1000 +
                         " playbackUs=" + (end - playStart) / 1000 +
                         " droppedCaptionBlocks=" + asrQueue.dropped)
+                    Diagnostics.event("spatial=" + spatialStatus)
                     lastDiagnosticMs = now
                 }
                 asrQueue.offer(CaptionBlock(input.copyOf(), capturedSamples * 1000 / SAMPLE_RATE,
@@ -368,13 +432,14 @@ class AudioPipeline(
                 com.akashrajeev.voicebeam.core.SpeechObservation.enqueue(
                     observation, if(matcherDenoised) denoised.copyOf(n) else input, voiceQueue)
                 onFrame(FrameInfo(sqrt(e / n), g, gate.probability, voice,
-                    routed?.productName?.toString().takeIf { headphoneRoute }))
+                    routed?.productName?.toString().takeIf { headphoneRoute }, spatialStatus))
                 if (com.akashrajeev.voicebeam.BuildConfig.DEBUG && ++dbgFrames % 400 == 0L) {
                     var er = 0f; for (k in 0 until input.size) er += input[k] * input[k]
                     Log.i("VoiceBeamAudio", "audiodbg dbg=" + (dbg != null) + " in=" + kotlin.math.sqrt(er / input.size) + " clean=" + kotlin.math.sqrt(e / n) + " g=" + g + " route=" + routed?.type + " written=" + written + " monitor=" + writeSpeech)
                 }
             }
         } finally {
+            if (motionRegistered) sensors.unregisterListener(motionListener)
             try { dfn?.close() } catch (_: Throwable) {}
             try { rec?.stop() } catch (_: Throwable) {}
             rec?.release()
