@@ -1,0 +1,32 @@
+name: Footage analysis internal gates
+on:
+  push:
+    branches: [experiment-12]
+    paths: ['.github/workflows/footage-analysis.yml', 'app/src/main/java/com/akashrajeev/voicebeam/core/FootageAnalysis.kt', 'app/src/test/java/com/akashrajeev/voicebeam/FootageAnalysisTest.kt']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Fetch pinned baseline models and runtime
+        run: bash scripts/fetch_models.sh
+      - name: Compile and run all baseline and footage analysis unit tests
+        run: ./gradlew --no-daemon :app:testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
+      - name: Internal reports and APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: footage-analysis-${{ github.sha }}
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 1
