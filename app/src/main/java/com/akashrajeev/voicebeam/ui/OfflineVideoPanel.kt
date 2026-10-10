@@ -1,0 +1,78 @@
+package com.akashrajeev.voicebeam.ui
+
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import com.akashrajeev.voicebeam.separation.FootageResult
+import com.akashrajeev.voicebeam.separation.OfflineFootageImport
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+
+@Composable
+fun OfflineVideoPanel(allowed: Boolean, onBusy: (Boolean) -> Unit = {}, onImported: () -> Unit) {
+    val context=LocalContext.current
+    val scope=rememberCoroutineScope()
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var start by remember { mutableStateOf("0") }
+    var end by remember { mutableStateOf("3") }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf("") }
+    var importJob by remember { mutableStateOf<Job?>(null) }
+    LaunchedEffect(allowed) {
+        if(!allowed && busy) { importJob?.cancel(); result="Import cancelled because recording or local processing started. Original unchanged." }
+    }
+    BackHandler(enabled=busy) {}
+    LaunchedEffect(busy) { onBusy(busy) }
+    DisposableEffect(Unit) { onDispose { onBusy(false) } }
+    val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { selected ->
+        if(selected!=null) { uri=selected; start="0"; end="3"; result="" }
+    }
+    Column(Modifier.fillMaxWidth().padding(bottom=12.dp)) {
+        Text("Custom video - offline isolation", color=Accent)
+        Text("1-120 seconds, under 256 MB. Pick 3-10 seconds where only the target speaks. Original stays unchanged. This does not change live listening.", color=Muted)
+        TextButton(onClick={ picker.launch(arrayOf("video/*")) },enabled=!busy && allowed,modifier=Modifier.testTag("pickOfflineVideo")) { Text("Choose video") }
+        if(!allowed) Text("Stop live listening and recording before offline isolation.",color=Muted)
+        if(result.isNotBlank()) Text(result,color=Muted)
+    }
+    uri?.let {
+        AlertDialog(
+            onDismissRequest={ if(!busy) uri=null },
+            title={ Text("Target-alone reference") },
+            text={ Column {
+                Text("Watch your original video first. Enter start/end seconds containing only the target voice, no other speaker. Use at least 3 seconds when possible. Short or inconsistent references and damaged extraction keep the original unchanged. Cannot isolate from a face alone. Quality varies, especially overlapping similar voices.")
+                OutlinedTextField(start,{start=it},label={Text("Start seconds")},enabled=!busy,singleLine=true,modifier=Modifier.testTag("referenceStart"))
+                OutlinedTextField(end,{end=it},label={Text("End seconds")},enabled=!busy,singleLine=true,modifier=Modifier.testTag("referenceEnd"))
+                if(busy) { CircularProgressIndicator(); Text("Working locally. Up to 3 minutes. Keep this screen open.") }
+                if(result.isNotBlank()) Text(result)
+            } },
+            confirmButton={ TextButton(onClick={
+                val a=start.toDoubleOrNull(); val b=end.toDoubleOrNull()
+                if(a==null || b==null || !a.isFinite() || !b.isFinite() || a<0 || b-a !in 1.0..10.0) { result="Choose a valid 1-10 second reference" }
+                else {
+                    busy=true; result=""
+                    importJob=scope.launch {
+                        try {
+                            when(val r=OfflineFootageImport.run(context,it,a,b)) {
+                                is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Offline isolated MP4 ready. Compare with original; extraction is not guaranteed."; uri=null; onImported() }
+                                is FootageResult.NeedsTap -> result="Original kept unchanged. Choose a 3-10 second moment where only the target speaks (" + r.reason.name + ")."
+                            }
+                        }
+                        catch(e:CancellationException) { throw e }
+                        catch(e:Exception) { result=e.message ?: "Import failed; original unchanged" }
+                        finally { busy=false }
+                    }
+                }
+            },enabled=!busy && allowed,modifier=Modifier.testTag("runOfflineIsolation")) { Text("Isolate offline") } },
+            dismissButton={ TextButton(onClick={uri=null},enabled=!busy) {Text("Cancel")} }
+        )
+    }
+}
