@@ -81,6 +81,19 @@ class FootageImportRoundTripTest {
                 }
                 mux.stop()
             } finally {mux.release();ex.release()}
+            val evidence=File(context.getExternalFilesDir(null),"offset-evidence").apply{mkdirs()}
+            fun pts(file:File):String {
+                val e=MediaExtractor();try {
+                    e.setDataSource(file.absolutePath)
+                    return (0 until e.trackCount).joinToString { i ->
+                        e.selectTrack(i);val first=e.sampleTime;e.unselectTrack(i)
+                        e.getTrackFormat(i).getString(MediaFormat.KEY_MIME)+"="+first
+                    }
+                } finally {e.release()}
+            }
+            val ptsLog="base:"+pts(base)+" shifted:"+pts(shifted)
+            android.util.Log.i("OffsetEvidence",ptsLog)
+            File(evidence,"pts.txt").writeText(ptsLog)
             val decoded=com.akashrajeev.voicebeam.separation.VideoAudioDecoder.decode(shifted)
             assertEquals(96000,decoded.size)
             assertTrue("Late audio must begin with silence",decoded.take(1600).all{kotlin.math.abs(it)<.001f})
@@ -88,6 +101,19 @@ class FootageImportRoundTripTest {
             val baseline=com.akashrajeev.voicebeam.separation.VideoAudioDecoder.decode(base)
             var err=0.0;var energy=0.0
             for(i in 1600 until 64000) {val d=decoded[i+4800]-baseline[i];err+=d*d;energy+=baseline[i]*baseline[i]}
+            WavWriter(File(evidence,"baseline.wav"),16000).use{it.write(baseline)}
+            WavWriter(File(evidence,"shifted.wav"),16000).use{it.write(decoded)}
+            var bestLag=0;var bestError=Double.POSITIVE_INFINITY
+            for(lag in -1024..1024) {
+                var le=0.0;var en=0.0
+                for(i in 1600 until 64000) {
+                    val j=i+4800+lag;if(j !in decoded.indices)continue
+                    val d=decoded[j]-baseline[i];le+=d*d;en+=baseline[i]*baseline[i]
+                }
+                val score=le/(en+1e-9);if(score<bestError){bestError=score;bestLag=lag}
+            }
+            val note="nominalError="+(err/(energy+1e-9))+" bestLagSamples="+bestLag+" bestError="+bestError
+            android.util.Log.i("OffsetEvidence",note);File(evidence,"error.txt").writeText(note)
             assertTrue("Video timeline speech mismatch",err/(energy+1e-9)<.0001)
             val hash=java.security.MessageDigest.getInstance("SHA-256").digest(shifted.readBytes())
             val result=com.akashrajeev.voicebeam.separation.OfflineFootageImport.run(context,Uri.fromFile(shifted),.3,3.3)
