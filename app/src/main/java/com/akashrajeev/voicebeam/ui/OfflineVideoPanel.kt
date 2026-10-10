@@ -1,6 +1,7 @@
 package com.akashrajeev.voicebeam.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -23,6 +24,7 @@ fun OfflineVideoPanel(allowed: Boolean, onBusy: (Boolean) -> Unit = {}, onImport
     var end by remember { mutableStateOf("3") }
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf("") }
+    BackHandler(enabled=busy) {}
     LaunchedEffect(busy) { onBusy(busy) }
     DisposableEffect(Unit) { onDispose { onBusy(false) } }
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { selected ->
