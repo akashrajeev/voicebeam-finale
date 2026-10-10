@@ -70,4 +70,12 @@ class FaceTrackBinnerTest {
         val b = FaceTrackBinner(dur); b.add(1000, emptyList()); b.add(500, emptyList())
     }
     @Test(expected = IllegalArgumentException::class) fun unknownTrackRejected() { FaceTrackBinner(dur).series(99) }
+
+    @Test fun facesAtListsBothBoxesAndFirstFaceTime() {
+        val b = FaceTrackBinner(dur); feed(b, 3f)
+        val f = b.facesAt(2f)
+        assertEquals(2, f.size); assertNotEquals(f[0].first, f[1].first)
+        assertEquals(0f, b.firstFaceSec()!!, 0.001f)
+        assertTrue(FaceTrackBinner(dur).facesAt(2f).isEmpty()); assertNull(FaceTrackBinner(dur).firstFaceSec())
+    }
 }
