@@ -1,4 +1,4 @@
-name: Offline video candidate gates v2
+name: Offline video candidate gates v3
 on:
   push:
     branches: [experiment-10]
@@ -40,9 +40,12 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: |
-            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest -Dorg.gradle.jvmargs="-Xmx3g"
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.OfflineVideoRoundTripTest -Dorg.gradle.jvmargs="-Xmx3g"
+            ./gradlew --no-daemon installDebug installDebugAndroidTest -Dorg.gradle.jvmargs="-Xmx3g"
+            adb shell am instrument -w -e class com.akashrajeev.voicebeam.OfflineImportUiTest com.akashrajeev.voicebeam.finale.test/androidx.test.runner.AndroidJUnitRunner | tee offline-ui-instrument.txt
+            grep -q '^OK (2 tests)' offline-ui-instrument.txt
             adb logcat -d -s TseTest:I > offline-extractor-log.txt
-            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/offline-custom-video.png ci-offline-ui.png || true
+            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/offline-custom-video.png ci-offline-ui.png
       - name: Restore phone APK
         run: ./gradlew --no-daemon assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
       - name: Keep results
