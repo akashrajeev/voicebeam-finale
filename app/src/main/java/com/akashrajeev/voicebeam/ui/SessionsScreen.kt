@@ -58,6 +58,10 @@ import java.util.Locale
 fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     val context = LocalContext.current
     val list by engine.sessionList.collectAsState()
+    val live by engine.state.collectAsState()
+    val recall = (context.applicationContext as com.akashrajeev.voicebeam.VoiceBeamApp).recall
+    val recallState by recall.state.collectAsState()
+    var offlineBusy by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<SessionMeta?>(null) }
     var deleting by remember { mutableStateOf<SessionMeta?>(null) }
@@ -82,9 +86,10 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
 
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.weight(1f).statusBarsPadding().padding(horizontal = 18.dp)) {
-            Text("Sessions", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
+            Text("Video & sessions", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
+            OfflineVideoPanel(allowed = com.akashrajeev.voicebeam.core.OfflineImportGate.allowed(recallState.recording,recallState.busy,recallState.asking,recallState.recapping,live.listening,live.recording.active,live.recording.exporting), onBusy = { offlineBusy = it }, onImported = { engine.refreshSessions() })
             if (list.isEmpty()) {
-                Text("No recordings yet. On the Focus screen, lock onto a face and press the red button.", color = Muted)
+                Text("Your videos appear here after isolation. Choose a video above to begin.", color = Muted)
             }
             LazyColumn(Modifier.testTag("sessionList")) {
                 items(list, key = { it.id }) { m ->
@@ -107,13 +112,17 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                             Text(seg.text, color = if (seg.isTarget) Color.White else Muted, fontSize = 14.sp)
                         }
                         if (expanded == m.id) {
+                            val fallback = File(m.dir, "offline-fallback.txt")
+                            if(fallback.exists()) Text(fallback.readText().take(160), color=Muted, fontSize=12.sp)
                             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (File(m.dir, "original.mp4").exists()) Chip("Original", color = Card2) { openFile(context, File(m.dir, "original.mp4"), "video/mp4") }
                                 if (m.video.exists()) Chip("▶ Play video", color = Card2) { openFile(context, m.video, "video/mp4") }
                                 if (m.cleanAudio.exists()) Chip(if (playing == m.id + "c") "■ Stop" else "▶ Clean", color = Card2) { play(m.cleanAudio, m.id + "c") }
                                 if (m.rawWav.exists()) Chip(if (playing == m.id + "r") "■ Stop" else "▶ Raw", color = Card2) { play(m.rawWav, m.id + "r") }
                             }
                             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Chip("Export", color = Accent.copy(alpha = 0.2f)) { share(context, m) }
+                                if(File(m.dir,"footage-report.txt").exists()) Chip("Share report", color=Card2) { shareReport(context,File(m.dir,"footage-report.txt")) }
                                 Chip("Rename", color = Card2) { renaming = m }
                                 Chip("Delete", color = Color(0x33FF4D4F)) { deleting = m }
                             }
@@ -123,7 +132,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                 }
             }
         }
-        BottomNav(Screen.SESSIONS, onNavigate)
+        if (!offlineBusy) BottomNav(Screen.SESSIONS, onNavigate)
     }
 
     renaming?.let { m ->
@@ -147,7 +156,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     }
 }
 
-private fun modeLabel(m: SessionMeta): String = when (m.mode) {
+private fun modeLabel(m: SessionMeta): String = if (File(m.dir, "footage-report.txt").exists()) "Offline routed isolation · original retained · 16 kHz mono" else if (File(m.dir, "offline-fallback.txt").exists()) "Original unchanged · isolation check failed" else if (File(m.dir, "offline-reference.txt").exists()) "Offline SpeakerBeam · original retained" else when (m.mode) {
     SaveMode.AUDIO -> "Audio + .srt"
     SaveMode.AUDIO_VIDEO -> "A+V · " + when (m.captions) { "burned" -> "Captions burned in"; "none" -> "No captions"; else -> ".srt file" }
     SaveMode.CAPTIONS -> "Captions only"
@@ -163,7 +172,7 @@ private fun openFile(context: Context, f: File, mime: String) {
 }
 
 private fun share(context: Context, m: SessionMeta) {
-    val files = listOf(m.video, m.cleanAudio, m.srt, m.txt, m.rawWav).filter { it.exists() && it.length() > 0 }
+    val files = listOf(m.video, m.cleanAudio, m.srt, m.txt, m.rawWav, File(m.dir,"footage-report.txt"), File(m.dir,"offline-fallback.txt")).filter { it.exists() && it.length() > 0 }
     if (files.isEmpty()) return
     val uris = ArrayList(files.map { uriFor(context, it) })
     val i = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
@@ -173,4 +182,14 @@ private fun share(context: Context, m: SessionMeta) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(i, "Export " + m.title))
+}
+
+private fun shareReport(context: Context, report: File) {
+    val uri=uriFor(context,report)
+    val intent=Intent(Intent.ACTION_SEND).apply {
+        type="text/plain"; putExtra(Intent.EXTRA_STREAM,uri)
+        clipData=ClipData.newRawUri(report.name,uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent,"Share offline isolation report"))
 }

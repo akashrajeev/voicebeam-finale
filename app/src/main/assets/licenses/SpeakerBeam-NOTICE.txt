@@ -1,0 +1,10 @@
+Offline extractor only. Not used for live listening.
+Weights: ESPnet Wangyou_Zhang_librimix_train_enh_tse_td_speakerbeam_raw
+https://huggingface.co/espnet/Wangyou_Zhang_librimix_train_enh_tse_td_speakerbeam_raw
+Release revision 0c7e30518719f3208c81042a869fea6b886a9871; model card licence CC BY 4.0.
+Attribution: Wangyou Zhang and ESPnet contributors. TD-SpeakerBeam architecture: Katerina Zmolikova et al., SpeakerBeam: Speaker Aware Neural Network for Target Speaker Extraction in Speech Mixtures (2019).
+Original checkpoint SHA256 7e1d6831d0df187ae8b23ed4d6804d07d0ec314336266e99f7da41a2f8ad055f.
+Changed: exported checkpoint to ONNX opset17, same trained parameters. Local metadata e9bdb6c0a8e51b8341435f49abe59ead136cd2b9d6b6c178990fdc50bf54c9eb.
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+This experimental output has no warranty. Quality and Android runtime are unverified until phone testing.
+ESPnet inference source licensed Apache2.0, with TCN layer derived from MIT Conv-TasNet. Full licence texts included below/separately.

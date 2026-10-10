@@ -16,12 +16,12 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.akashrajeev.voicebeam.finale"
+        applicationId = "com.akashrajeev.voicebeam.spatialrecall"
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 108
-        versionName = "ENH-7"
+        versionCode = 200
+        versionName = "EXP-spatial-recall-local"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
@@ -32,6 +32,14 @@ android {
     // the release build is left unsigned instead of falling back to the debug key.
     val releaseKeystore = System.getenv("VB_RELEASE_KEYSTORE")
     signingConfigs {
+        if (System.getenv("VB_RECALL_KEYSTORE") != null) {
+            create("recallLab") {
+                storeFile = file(System.getenv("VB_RECALL_KEYSTORE"))
+                storePassword = System.getenv("VB_RECALL_KEY_PASSWORD")
+                keyAlias = "recall"
+                keyPassword = System.getenv("VB_RECALL_KEY_PASSWORD")
+            }
+        }
         if (releaseKeystore != null) {
             create("release") {
                 storeFile = file(releaseKeystore)
@@ -44,7 +52,7 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("recallLab") ?: signingConfigs.getByName("debug")
             // Debug also carries x86_64 so the emulator tests can run it.
             ndk { abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a") }
         }
@@ -61,9 +69,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+
     buildFeatures { compose = true; buildConfig = true }
-    androidResources { noCompress += listOf("onnx", "task", "txt") }
+    androidResources { noCompress += listOf("onnx", "task", "txt", "bin") }
     packaging {
         jniLibs { useLegacyPackaging = true }
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -72,7 +80,9 @@ android {
 }
 
 dependencies {
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
     implementation(files("libs/sherpa-onnx.aar"))
+    implementation(files("libs/onnxruntime-java-jni.aar"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
@@ -119,3 +129,5 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
 }
+
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }

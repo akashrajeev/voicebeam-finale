@@ -1,8 +1,8 @@
-name: ENH7 main validation and APK
-# Automatic only for this explicitly approved workflow edit; future runs require approval.
+name: recall-gemma-2026-10-10 validation and APK
+# RECALL-2.3: prompt echo quarantine and cancellable recap deadlines. Branch/artifacts only.
 on:
   push:
-    branches: [main]
+    branches: [recall-gemma-2026-10-10]
     paths: ['.github/workflows/fix-apk.yml']
   workflow_dispatch:
 permissions:
@@ -21,8 +21,38 @@ jobs:
           java-version: '17'
       - name: Fetch public models
         run: bash scripts/fetch_models.sh
-      - name: Unit tests and debug APK
-        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
+      - name: Unit tests and stable-signed Recall APK
+        env:
+          RECALL_SIGNING: ${{ secrets.VB_RECALL_SIGNING }}
+        run: |
+          test -n "$RECALL_SIGNING" || { echo 'Recall signing secret is required'; exit 1; }
+          export VB_RECALL_KEYSTORE="$RUNNER_TEMP/recall.p12"
+          python3 - <<'PY_SIGN'
+          import json,os,base64
+          cfg=json.loads(os.environ['RECALL_SIGNING'])
+          open(os.environ['VB_RECALL_KEYSTORE'],'wb').write(base64.b64decode(cfg['keystore']))
+          os.chmod(os.environ['VB_RECALL_KEYSTORE'],0o600)
+          with open(os.environ['RUNNER_TEMP']+'/recall-password','w') as f: f.write(cfg['password'])
+          PY_SIGN
+          export VB_RECALL_KEY_PASSWORD="$(cat "$RUNNER_TEMP/recall-password")"
+          trap 'rm -f "$VB_RECALL_KEYSTORE" "$RUNNER_TEMP/recall-password"' EXIT
+          ./gradlew --no-daemon testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/recall-signer.txt"
+          grep -F 'Signer #1 certificate SHA-256 digest: 2e35a6f03098d369b373cc119fe3aa9f957393485a7ee0f8af4542ddd83e6148' "$RUNNER_TEMP/recall-signer.txt"
+      - name: Desktop decode check of bundled Moonshine Base (informational)
+        continue-on-error: true
+        run: |
+          pip install sherpa-onnx numpy soundfile
+          python3 - <<'PY'
+          import sherpa_onnx, soundfile as sf, glob
+          d='app/src/main/assets/models/asr/'
+          r=sherpa_onnx.OfflineRecognizer.from_moonshine(preprocessor=d+'preprocess.onnx',encoder=d+'encode.int8.onnx',uncached_decoder=d+'uncached_decode.int8.onnx',cached_decoder=d+'cached_decode.int8.onnx',tokens=d+'tokens.txt',num_threads=2)
+          import numpy as np
+          for p in sorted(glob.glob('app/src/androidTest/assets/*.wav'))[:1]:
+              x,sr=sf.read(p,dtype='float32')
+              if x.ndim>1: x=x[:,0]
+              s=r.create_stream(); s.accept_waveform(sr,x); r.decode_stream(s); print('MOONSHINE_BASE_DECODE', p, len(s.result.text), 'chars')
+          PY
       - name: Report exact source metadata and tests
         run: |
           python3 - <<'PY'
@@ -31,17 +61,31 @@ jobs:
           config = pathlib.Path('app/build/generated/source/buildConfig/debug/com/akashrajeev/voicebeam/BuildConfig.java').read_text()
           assert 'LAB_COMMIT = "' + sha + '";' in config
           print('BuildConfig source commit verified: ' + sha)
+          import zipfile,hashlib
+          with zipfile.ZipFile('app/build/outputs/apk/debug/app-debug.apk') as apk:
+              model=apk.read('assets/models/dfn3-mobile.bin')
+              assert model[:2]==b'\x1f\x8b'
+              assert hashlib.sha256(model).hexdigest()=='5600b6857117ecc7cf460b8ec4841963bfa6d718921d424d42dea5d3d37a8c32'
+              native=apk.read('lib/arm64-v8a/libdf.so')
+              assert hashlib.sha256(native).hexdigest()=='0ec8bc3971bbb8a804b4b53910e8cad3626b9db6b4c44167eba9b669f58f0584'
+              print('APK DFN gzip model and arm64 JNI bytes verified')
+              for n,sz in {'encode.int8.onnx':50311494,'uncached_decode.int8.onnx':122120451,'cached_decode.int8.onnx':99983837,'preprocess.onnx':14077290}.items():
+                  assert apk.getinfo('assets/models/asr/'+n).file_size==sz,n
+              print('APK Moonshine Base int8 file sizes verified')
           roots = [E.parse(p).getroot() for p in glob.glob('app/build/test-results/testDebugUnitTest/*.xml')]
           tests = sum(int(r.attrib['tests']) for r in roots)
           failures = sum(int(r.attrib.get('failures', '0')) + int(r.attrib.get('errors', '0')) for r in roots)
           assert roots and failures == 0
           print(f'{tests} JVM tests; {failures} failures/errors. Debug APK built. Phone test separate.')
           PY
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | head -1 | tee "$RUNNER_TEMP/recall-version.txt"
+          grep -F "versionCode='123' versionName='RECALL-2.3'" "$RUNNER_TEMP/recall-version.txt"
           sha256sum app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/VoiceBeam-RECALL-2.3.apk
       - name: Upload candidate APK
         uses: actions/upload-artifact@v4
         with:
-          name: main-${{ github.sha }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: VoiceBeam-RECALL-2.3-${{ github.sha }}
+          path: app/build/outputs/apk/debug/VoiceBeam-RECALL-2.3.apk
           retention-days: 1
           if-no-files-found: error

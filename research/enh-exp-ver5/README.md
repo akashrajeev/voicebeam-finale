@@ -1,0 +1,9 @@
+# ver5 middle-strength experiment (v114)
+
+Base ver4 b6e9a3e, fixednativeattenuation32dB instead of18dB. Same95tap7.6kconverter/postfilter0/model/nativehash/rawanalysis/gate/UI/route/fallback. Native aligned spectral originalmix2.51%, versus12.59%ver4 and.316%ver3b. This is a model-informed middle, not a measured optimum. User found ver4 clearer but with too much background; ver3b crowd cut good with weak/stuck voice. No verified root cause of sticking and no target-speaker extraction claim. Near loud speakers can still pass as speech.
+
+Added bounded all-256sample-batch native-path time histogram (500us buckets; p95UpperUs is BUCKET UPPER BOUND, not exact percentile), max/count/deadlinemisses, native480sampleframes, pre-PCM clippedsamplecount, suspiciousLSNRcount and outputshortwrite/missingsamplecounts. Batches time adapter+one/twonativeframes, NOT pure per480frame kernel or mic-to-ear latency. Cumulative counters last acrossfallback for diagnosis; collected for current hearing session only. Negative returnLSNR not blindly rejected.
+
+Phone A/B with boostfixed6dB, same room/near target/crowd/Bluetooth, nonzeroNoise removal (allnonzero nativefulloutput). Check word onset/consonants/naturalness AND crowd reduction. Counter changes can find deadline/PCMclipping/shortwrites but cannot prove missing syllables without audio reference. No native hang protection: deadline checked after return; 5-10minsoak before demo. Offstillrawhearingbeforegate/filter/boost/limiterandcostsnativeprocessing.
+
+Tests: boundedhistogram/overflow/exactdeadline boundary, shortwrite missing counts; prior128tests and actualAPKmodel/JNIhash checks retained. No host JVM nativeexecution. Source-nativeattenmix/onsetzero-mask https://raw.githubusercontent.com/KaleyraVideo/DeepFilterNet/681e0947f5145eea62cb6547d1c59090d0680b1f/libDF/src/tract.rs . JNI https://raw.githubusercontent.com/KaleyraVideo/DeepFilterNet/681e0947f5145eea62cb6547d1c59090d0680b1f/libDF/src/android.rs .

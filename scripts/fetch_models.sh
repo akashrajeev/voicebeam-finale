@@ -12,11 +12,13 @@ if [ ! -f app/libs/sherpa-onnx.aar ]; then
   curl -fL -o app/libs/sherpa-onnx.aar "$REL/v$SHERPA_VERSION/sherpa-onnx-$SHERPA_VERSION.aar"
 fi
 
-# 1. Lab ASR winner on NPTEL Pure-Set: Moonshine Tiny int8 (not streaming).
-ASR=sherpa-onnx-moonshine-tiny-en-int8
+# 1. ASR: Moonshine Base int8 (MIT, not streaming). ver5c upgrade from Tiny; same four file names.
+ASR=sherpa-onnx-moonshine-base-en-int8
+ASR_SHA=21870cecaa2e44e4e2bf63e02d1072bed183ccd10284871353bd9d24dad14e5e
 if [ ! -f "$ASSETS/asr/preprocess.onnx" ]; then
   tmp=$(mktemp -d)
   curl -fL -o "$tmp/asr.tar.bz2" "$REL/asr-models/$ASR.tar.bz2"
+  echo "$ASR_SHA  $tmp/asr.tar.bz2" | sha256sum -c -
   tar -xjf "$tmp/asr.tar.bz2" -C "$tmp"
   mkdir -p "$ASSETS/asr"
   cp "$tmp/$ASR/"*.onnx "$tmp/$ASR/tokens.txt" "$ASSETS/asr/"
@@ -38,3 +40,42 @@ mkdir -p app/src/androidTest/assets
 [ -f app/src/androidTest/assets/noisy_speech.wav ] || curl -fL -o app/src/androidTest/assets/noisy_speech.wav "$REL/speech-enhancement-models/speech_with_noise.wav" || true
 
 ls -la "$ASSETS" "$ASSETS/asr"
+
+# Experimental DFN3 mobile binary/model, pinned Apache2 Android wrapper release source.
+# No runtime downloads. Verify bytes before packaging.
+DFN_REV=9fff40b97bb8754afe6530ffdc234cb15b8d32da
+DFN_BASE=https://raw.githubusercontent.com/KaleyraVideo/AndroidDeepFilterNet/$DFN_REV/noise-filter/src
+mkdir -p app/src/main/jniLibs/arm64-v8a
+[ -f "$ASSETS/dfn3-mobile.bin" ] || curl -fL -o "$ASSETS/dfn3-mobile.bin" "$DFN_BASE/bundledModel/res/raw/deep_filter_mobile_model"
+[ -f app/src/main/jniLibs/arm64-v8a/libdf.so ] || curl -fL -o app/src/main/jniLibs/arm64-v8a/libdf.so "$DFN_BASE/main/jniLibs/arm64-v8a/libdf.so"
+printf '%s\n' '5600b6857117ecc7cf460b8ec4841963bfa6d718921d424d42dea5d3d37a8c32  app/src/main/assets/models/dfn3-mobile.bin' | sha256sum -c -
+printf '%s\n' '0ec8bc3971bbb8a804b4b53910e8cad3626b9db6b4c44167eba9b669f58f0584  app/src/main/jniLibs/arm64-v8a/libdf.so' | sha256sum -c -
+
+# Offline model donor pinned to an exact commit; missing or mismatched bytes fail the build.
+[ -f "$ASSETS/speakerbeam-8k.onnx" ] || curl -fL -o "$ASSETS/speakerbeam-8k.onnx" "https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/models/speakerbeam-8k.onnx"
+printf '%s\n' 'e9bdb6c0a8e51b8341435f49abe59ead136cd2b9d6b6c178990fdc50bf54c9eb  app/src/main/assets/models/speakerbeam-8k.onnx' | sha256sum -c -
+
+# Isolate Java ORT1.20 core+JNI, retain sherpa1.28.2 core unchanged.
+ORT_AAR=app/libs/onnxruntime-java-jni.aar
+if [ ! -f "$ORT_AAR" ]; then
+  curl -fL -o /tmp/ort-java-source.aar https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.20.0/onnxruntime-android-1.20.0.aar
+  echo '07a8f71ef890afed8c6087a56220e6d558a492804276ee2dd7cb7f6262242027  /tmp/ort-java-source.aar' | sha256sum -c -
+  python3 -m pip install patchelf==0.17.2.4
+  python3 scripts/isolate_ort.py
+fi
+
+
+# Android fixture assets fetched from pinned donor main-assets location.
+mkdir -p app/src/main/assets/enhfixtures
+[ -s app/src/main/assets/enhfixtures/1089-134686-0002.wav ] || curl -fL -o app/src/main/assets/enhfixtures/1089-134686-0002.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/1089-134686-0002.wav
+echo "90f57d052a67fae495a55cd06c7423806069a02b92e8c00a5d6e321181a136f4  app/src/main/assets/enhfixtures/1089-134686-0002.wav" | sha256sum -c -
+[ -s app/src/main/assets/enhfixtures/1221-135767-0005.wav ] || curl -fL -o app/src/main/assets/enhfixtures/1221-135767-0005.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/1221-135767-0005.wav
+echo "6851db68df3122356772b70e1471cfccfc832fcd6eddb23bc39d5673381e9f72  app/src/main/assets/enhfixtures/1221-135767-0005.wav" | sha256sum -c -
+[ -s app/src/main/assets/enhfixtures/1089-134686-0013.wav ] || curl -fL -o app/src/main/assets/enhfixtures/1089-134686-0013.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/1089-134686-0013.wav
+echo "4d22ebf856da6bd68946c2b5fd926ccee05bf49fe2ade805c4b057e1c191ad8a  app/src/main/assets/enhfixtures/1089-134686-0013.wav" | sha256sum -c -
+[ -s app/src/main/assets/enhfixtures/ATTRIBUTION.txt ] || curl -fL -o app/src/main/assets/enhfixtures/ATTRIBUTION.txt https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/ATTRIBUTION.txt
+echo "0217bda8c2281be7a419ed52cf19888de32a68a4a46c7b672b01fb8e7c63ff3d  app/src/main/assets/enhfixtures/ATTRIBUTION.txt" | sha256sum -c -
+
+# Pinned offline DPDFNet2 analysis front end, bundled for offline use.
+[ -f "$ASSETS/dpdfnet2.onnx" ] || curl -fL -o "$ASSETS/dpdfnet2.onnx" "$REL/speech-enhancement-models/dpdfnet2.onnx"
+printf '%s\n' 'ce35d6025fc71df0ef10d1540e1b7916837bbfe5f6896deb744508d2cad487a9  app/src/main/assets/models/dpdfnet2.onnx' | sha256sum -c -

@@ -19,3 +19,5 @@ keystore/
 *.keystore
 *.p12
 local.properties
+
+app/src/main/jniLibs/

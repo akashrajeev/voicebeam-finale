@@ -11,9 +11,9 @@ class WearerVetoTest {
         g.targetProbability(target.copy(wearerMatch=1f, wearerVetoEnabled=true, voiceMatch=0.81f))
         assertEquals(TargetState.OTHER,g.state)
         g.targetProbability(target.copy(wearerMatch=0.95f, wearerVetoEnabled=true, voiceMatch=0.9f))
-        assertEquals(TargetState.TARGET,g.state)
+        assertEquals(TargetState.UNCERTAIN,g.state)
         g.targetProbability(target.copy(wearerMatch=1f, wearerVetoEnabled=true, voiceMatch=null))
-        assertEquals(TargetState.TARGET,g.state)
+        assertEquals(TargetState.UNCERTAIN,g.state)
     }
     @Test fun wearerVetoDoesNotAllowBoost() {
         val g=TargetGate()

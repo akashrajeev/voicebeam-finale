@@ -1,0 +1,96 @@
+name: Unified Recall and footage port validation
+# Targeted Listen gate tuning with Recall denoiser retained
+on:
+  push:
+    branches: [exp-13-recall-gemma]
+    paths: ['.github/workflows/unified-recall-footage.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Fetch pinned models and isolated runtime
+        run: bash scripts/fetch_models.sh
+      - name: Compile app, unit tests, instrumented tests and verify Recall signer
+        env:
+          RECALL_SIGNING: ${{ secrets.VB_RECALL_SIGNING }}
+        run: |
+          test -n "$RECALL_SIGNING" || { echo 'Recall signing secret is required'; exit 1; }
+          export VB_RECALL_KEYSTORE="$RUNNER_TEMP/recall.p12"
+          python3 - <<'PY_SIGN'
+          import json,os,base64
+          cfg=json.loads(os.environ['RECALL_SIGNING'])
+          open(os.environ['VB_RECALL_KEYSTORE'],'wb').write(base64.b64decode(cfg['keystore']))
+          os.chmod(os.environ['VB_RECALL_KEYSTORE'],0o600)
+          with open(os.environ['RUNNER_TEMP']+'/recall-password','w') as f: f.write(cfg['password'])
+          PY_SIGN
+          export VB_RECALL_KEY_PASSWORD="$(cat "$RUNNER_TEMP/recall-password")"
+          trap 'rm -f "$VB_RECALL_KEYSTORE" "$RUNNER_TEMP/recall-password"' EXIT
+          ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleDebugAndroidTest -Dorg.gradle.jvmargs="-Xmx3g"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/recall-signer.txt"
+          grep -F 'Signer #1 certificate SHA-256 digest: 2e35a6f03098d369b373cc119fe3aa9f957393485a7ee0f8af4542ddd83e6148' "$RUNNER_TEMP/recall-signer.txt"
+      - name: Verify packaged offline analysis model
+        run: |
+          unzip -p app/build/outputs/apk/debug/app-debug.apk assets/models/dpdfnet2.onnx > /tmp/packaged-dpdfnet2.onnx
+          echo 'ce35d6025fc71df0ef10d1540e1b7916837bbfe5f6896deb744508d2cad487a9  /tmp/packaged-dpdfnet2.onnx' | sha256sum -c -
+      - name: Enable emulator KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Keep phone APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-unified-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 1
+      - name: Offline native extraction and UI
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          VB_EMULATOR: '1'
+        with:
+          api-level: 29
+          arch: x86_64
+          disable-animations: true
+          script: |
+            trap 'adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/offset-evidence offset-evidence || true; adb logcat -d -s OffsetEvidence:I > offset-evidence-log.txt || true' EXIT
+            ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.UnifiedNavigationUiTest,com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.OfflineVideoRoundTripTest,com.akashrajeev.voicebeam.FootageImportRoundTripTest#importPreservesOriginalAndExportsSynchronizedVideo,com.akashrajeev.voicebeam.FootageImportRoundTripTest#cancelBeforeExtractionDoesNotWriteOutput -Dorg.gradle.jvmargs="-Xmx3g"
+            adb logcat -d -s OfflineGuard:I TseTest:I FootageNative:I OfflineFootageGuard:I > offline-extractor-log.txt
+            cat offline-extractor-log.txt
+            ./gradlew --no-daemon installDebug installDebugAndroidTest -Dorg.gradle.jvmargs="-Xmx3g"
+            adb shell am instrument -w -e class com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.UnifiedNavigationUiTest com.akashrajeev.voicebeam.finale.test/androidx.test.runner.AndroidJUnitRunner | tee offline-ui-instrument.txt
+            grep -q '^OK (6 tests)' offline-ui-instrument.txt
+            adb logcat -d -s TseTest:I > offline-extractor-log.txt
+            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/offline-custom-video.png ci-offline-ui.png
+            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/unified-video-navigation.png ci-unified-nav.png
+            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/stereo-probe-panel.png ci-stereo-probe.png
+            adb pull /sdcard/Android/data/com.akashrajeev.voicebeam.finale/files/listen-tuning.png ci-listen-tuning.png
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/recall.p12"
+      - name: Keep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unified-gates-${{ github.sha }}
+          path: |
+            app/build/reports/
+            app/build/outputs/androidTest-results/
+            ci-offline-ui.png
+            ci-unified-nav.png
+            ci-stereo-probe.png
+            ci-listen-tuning.png
+            offline-extractor-log.txt
+            offset-evidence/
+            offset-evidence-log.txt
+          retention-days: 1
