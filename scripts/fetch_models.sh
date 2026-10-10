@@ -40,3 +40,14 @@ mkdir -p app/src/androidTest/assets
 [ -f app/src/androidTest/assets/noisy_speech.wav ] || curl -fL -o app/src/androidTest/assets/noisy_speech.wav "$REL/speech-enhancement-models/speech_with_noise.wav" || true
 
 ls -la "$ASSETS" "$ASSETS/asr"
+
+# Android fixture assets fetched from pinned donor main-assets location.
+mkdir -p app/src/main/assets/enhfixtures
+[ -s app/src/main/assets/enhfixtures/1089-134686-0002.wav ] || curl -fL -o app/src/main/assets/enhfixtures/1089-134686-0002.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/1089-134686-0002.wav
+echo "90f57d052a67fae495a55cd06c7423806069a02b92e8c00a5d6e321181a136f4  app/src/main/assets/enhfixtures/1089-134686-0002.wav" | sha256sum -c -
+[ -s app/src/main/assets/enhfixtures/1221-135767-0005.wav ] || curl -fL -o app/src/main/assets/enhfixtures/1221-135767-0005.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/1221-135767-0005.wav
+echo "6851db68df3122356772b70e1471cfccfc832fcd6eddb23bc39d5673381e9f72  app/src/main/assets/enhfixtures/1221-135767-0005.wav" | sha256sum -c -
+[ -s app/src/main/assets/enhfixtures/1089-134686-0013.wav ] || curl -fL -o app/src/main/assets/enhfixtures/1089-134686-0013.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/1089-134686-0013.wav
+echo "4d22ebf856da6bd68946c2b5fd926ccee05bf49fe2ade805c4b057e1c191ad8a  app/src/main/assets/enhfixtures/1089-134686-0013.wav" | sha256sum -c -
+[ -s app/src/main/assets/enhfixtures/ATTRIBUTION.txt ] || curl -fL -o app/src/main/assets/enhfixtures/ATTRIBUTION.txt https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/enhfixtures/ATTRIBUTION.txt
+echo "0217bda8c2281be7a419ed52cf19888de32a68a4a46c7b672b01fb8e7c63ff3d  app/src/main/assets/enhfixtures/ATTRIBUTION.txt" | sha256sum -c -
