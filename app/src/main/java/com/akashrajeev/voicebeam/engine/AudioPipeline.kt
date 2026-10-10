@@ -281,7 +281,7 @@ class AudioPipeline(
                         " effectiveBoost=" + boost + " boostDb=" + boostDb + " rawRms=" + sqrt(rawEnergy / input.size) +
                         " outputRms=" + sqrt(outputEnergy / n) +
                         " micSamples=" + input.size + " level=" + sqrt(e / n) +
-                        " strict=" + gate.tuning.strictEnabled + " strictResidual=" + gate.tuning.residualGain +
+                        " strictMode=" + (if (gate.tuning.strictFull) "full" else "speech-only") + " strict=" + gate.tuning.strictEnabled + " strictResidual=" + gate.tuning.residualGain +
                         " strictHangoverMs=" + gate.tuning.hangoverMs + " targetThreshold=" + gate.tuning.targetThreshold +
                         " matcherInput=" + (if (matcherDenoised) "denoised" else "raw") + " track=ENH tseEnabled=false enrollment=" + enrollmentStatus() +
                         " quietOthers=" + quietOthers + " locked=" + s.hasLock + " visible=" + s.lockedVisible +
