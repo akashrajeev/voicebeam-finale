@@ -68,7 +68,7 @@ class VoiceBeamEngine(private val app: Context) {
     @Volatile private var models: AudioModels? = null
     private val tracker = FaceTracker()
     private val consent = ConsentGate()
-    private val consentLog by lazy { ConsentLog(File(app.filesDir, "consent/consent_log.jsonl")) }
+    private val consentLog by lazy { ConsentLog(java.io.File(app.filesDir, "consent/consent_log.jsonl")) }
     private var pipeline: AudioPipeline? = null
     private val lifecycle = ListenLifecycle()
     private val loadingModels = AtomicBoolean(false)
@@ -85,6 +85,7 @@ class VoiceBeamEngine(private val app: Context) {
 
     @Volatile private var latestProbability = 1f
     @Volatile private var latestVoiceMatch: Float? = null
+    @Volatile private var voiceScoreSequence = 0L
     @Volatile private var lastVoiceMatchAtMs = 0L
     @Volatile private var visionClockMs = 0L
 
@@ -125,7 +126,7 @@ class VoiceBeamEngine(private val app: Context) {
         if (!loadingModels.compareAndSet(false, true)) return
         scope.launch(Dispatchers.IO) {
             try {
-                val m = AudioModels.load(app.assets)
+                val m = AudioModels.load(app.assets, listOf(app.getExternalFilesDir(null), app.filesDir))
                 models = m
                 learner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)
                 wearerLearner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)
@@ -179,8 +180,8 @@ class VoiceBeamEngine(private val app: Context) {
     private fun lockWithConsent(id: Int) {
         if (!tracker.lockFace(id)) return
         learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
-        _state.update { it.copy(lockedId = id, voiceLearned = false, voiceMatch = null,
-            voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
+        _state.update { it.copy(lockedId = id, voiceLearned = learner?.learned == true, voiceMatch = null,
+            voiceEnrollmentActive = learner?.enrollmentEnabled == true, voiceEnrollmentProgress = learner?.progress ?: 0f) }
     }
 
     /** Called with each finished caption sentence. */
@@ -209,7 +210,7 @@ class VoiceBeamEngine(private val app: Context) {
             }
             is ConsentResult.Refused -> consentLogAdd("refused", null, null, heard)
             is ConsentResult.NeedsRetry -> consentLogAdd("retry:" + r.reason.replace(' ', '_'), consent.faceId, null, heard)
-            is ConsentResult.Withdrawn -> { consentLogAdd("withdrawn_" + r.via, null, null, heard); revokeLock() }
+            is ConsentResult.Withdrawn -> { consentLogAdd("withdrawn_" + r.via, null, null, heard); unlock() }
             ConsentResult.Ignored -> {}
         }
         publishConsent()
@@ -219,12 +220,7 @@ class VoiceBeamEngine(private val app: Context) {
     fun withdrawConsent() {
         consent.withdraw("button")
         consentLogAdd("withdrawn_button", null, null, null)
-        revokeLock(); publishConsent()
-    }
-
-    private fun revokeLock() {
-        audioOnly = false; tracker.unlock(); learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
-        _state.update { it.copy(lockedId = null, voiceLearned = false, voiceMatch = null, voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
+        unlock()
     }
 
     @Volatile private var consentRecordCount = -1
@@ -253,7 +249,7 @@ class VoiceBeamEngine(private val app: Context) {
         learner?.beginEnrollment()
         latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
         Diagnostics.event("target_enrollment_begin")
-        _state.update { it.copy(voiceLearned = false, voiceMatch = null,
+        _state.update { it.copy(voiceLearned = learner?.learned == true, voiceMatch = null,
             voiceEnrollmentActive = true, voiceEnrollmentProgress = 0f) }
     }
 
@@ -306,8 +302,13 @@ class VoiceBeamEngine(private val app: Context) {
             wearerMatch = latestWearerMatch.takeIf { now - lastVoiceMatchAtMs < 1000L },
             wearerVetoEnabled = wearerVetoEnabled,
             voiceActive = false,
-            voiceLearned = learner?.learned == true,
-            lockedVisible = !audioOnly && (lockedFace == null || now - lockedFace.lastSeenMs < 400),
+            voiceLearned = learner?.learned == true && learner?.enrollmentEnabled != true,
+            voiceScoreSequence = voiceScoreSequence,
+            voiceQuerySamples = learner?.scoreQuerySamples ?: 0L,
+            voiceScoreAgeMs = if (lastVoiceMatchAtMs > 0) now - lastVoiceMatchAtMs else Long.MAX_VALUE,
+            visionAgeMs = lockedFace?.let { now - it.lastSeenMs } ?: -1,
+            lockedVisible = !audioOnly && lockedFace != null &&
+                com.akashrajeev.voicebeam.core.SpeechObservation.visionFresh(now, lockedFace.lastSeenMs),
         )
     }
 
@@ -348,6 +349,7 @@ class VoiceBeamEngine(private val app: Context) {
         p.enrollmentActive = { learner?.enrollmentEnabled == true || wearerLearner?.enrollmentEnabled == true }
         p.enrollmentStatus = { enrollmentMessage() }
         p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
+        p.gateTuning = tuning(s); p.matcherDenoised = s.matcherDenoised
         pipeline = p
         pipelineDebugFeed = wantDebug
         if (wantDebug) {
@@ -372,6 +374,7 @@ class VoiceBeamEngine(private val app: Context) {
         if (!lifecycle.beginStop()) return
         if (_state.value.recording.active) stopRecording()
         workers.set(false)
+        learner?.cancelEnrollment();wearerLearner?.cancelEnrollment()
         audioOnly = false
         _state.update { it.copy(audioOnly = false) }
         pipeline?.stop(); pipeline = null
@@ -459,10 +462,11 @@ class VoiceBeamEngine(private val app: Context) {
                 }
                 val speakerNow = SystemClock.elapsedRealtime()
                 if (speakerNow - diagnosticVoiceAt >= 1000) {
-                    Diagnostics.event("speakerUs=" + (SystemClock.elapsedRealtimeNanos() - speakerStart) / 1000 + " learned=" + l.learned + " enrollmentActive=" + l.enrollmentEnabled + " enrollmentProgress=" + l.progress + " completedPhrases=" + l.completedPhrases + " match=" + score)
+                    Diagnostics.event("speakerUs=" + (SystemClock.elapsedRealtimeNanos() - speakerStart) / 1000 + " learned=" + l.learned + " enrollmentActive=" + l.enrollmentEnabled + " enrollmentProgress=" + l.progress + " completedPhrases=" + l.completedPhrases + " match=" + score + " queryInputSamples="+l.queryInputSamples+" scoreQuerySamples="+l.scoreQuerySamples+" querySamples=" + l.querySamplesBuffered + " scoreAgeMs=" + (if (lastVoiceMatchAtMs > 0) SystemClock.uptimeMillis() - lastVoiceMatchAtMs else -1))
                     diagnosticVoiceAt = speakerNow
                 }
                 if (score != null) {
+                    voiceScoreSequence++
                     latestVoiceMatch = score; lastVoiceMatchAtMs = SystemClock.uptimeMillis()
                     val query = l.lastQueryEmbedding
                     val wearerTemplate = wearer?.centroid
@@ -491,13 +495,28 @@ class VoiceBeamEngine(private val app: Context) {
 
     // ---------- settings ----------
 
+    private fun tuning(s: Settings) = com.akashrajeev.voicebeam.core.GateTuning(
+        strictEnabled=s.strictFocus,strictFull=s.strictFull,residualGain=s.strictResidual,
+        hangoverMs=s.strictHangoverMs,targetThreshold=s.targetMatchThreshold).sanitized()
+
     fun updateSettings(f: (Settings) -> Settings) {
         val old = _settings.value
         val s = f(old)
         _settings.value = s
         consent.requireBoth = s.requireBothConsent
         settingsStore.save(s)
-        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise }
+        if(s.matcherDenoised != old.matcherDenoised) {
+            val restart=pipeline!=null
+            if(restart) stopListening()
+            // A template and its queries must use the same feed; clear both published profiles.
+            learner?.reset();wearerLearner?.reset()
+            latestVoiceMatch=null;latestWearerMatch=null;lastVoiceMatchAtMs=0L
+            _state.update { it.copy(voiceLearned=false,voiceMatch=null,voiceEnrollmentActive=false,voiceEnrollmentProgress=0f,wearerLearned=false,wearerEnrollmentActive=false,wearerVetoEnabled=false) }
+            wearerVetoEnabled=false
+            Diagnostics.event("matcher_input_changed_relearn_required")
+            if(restart) startListening()
+        }
+        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise; it.gateTuning=tuning(s);it.matcherDenoised=s.matcherDenoised }
         if (s.stageEnabled != old.stageEnabled) applyStage(s.stageEnabled)
         if (s.useSceneMic != old.useSceneMic && pipeline != null) { stopListening(); startListening() }
         // Demo feed toggles swap the audio source too (recorded wav vs mic).
@@ -515,7 +534,6 @@ class VoiceBeamEngine(private val app: Context) {
         audioOnly = false
         // Camera retargeting needs a fresh tap; do not silently attach to a new face.
         tracker.reset(); learner?.reset(); latestVoiceMatch = null; latestWearerMatch = null; lastVoiceMatchAtMs = 0L
-        consent.cancel()
         _state.update { it.copy(audioOnly = false, lockedId = null, voiceLearned = false, voiceMatch = null, voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
     }
 
