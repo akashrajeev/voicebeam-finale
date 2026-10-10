@@ -16,6 +16,8 @@ class ClusterResult internal constructor(val assign: IntArray, val clusterCount:
 
 object FootageAnalysis {
     const val BIN_SEC = 0.5f
+    /** Pinned 0.45 (eval sweep 0.40/0.42/0.45/0.50 across 9 cases; centre of the stable region with the plan-stability gate active). Was 0.5. */
+    const val DEFAULT_MERGE_COS = 0.45f
 
     fun cosine(a: FloatArray, b: FloatArray): Float {
         require(a.size == b.size) { "embedding dimension mismatch: ${a.size} vs ${b.size}" }
@@ -43,7 +45,7 @@ object FootageAnalysis {
      * Windows with null/non-finite embeddings abstain (-1). Clusters smaller than minClusterWindows abstain; if none qualify, nothing is clustered.
      * If more than maxClusters qualify, only the largest maxClusters are kept and the rest abstain.
      */
-    internal fun cluster(ws: List<WindowEmbedding>, mergeCos: Float = 0.5f, maxClusters: Int = 6, minClusterWindows: Int = 3): ClusterResult {
+    internal fun cluster(ws: List<WindowEmbedding>, mergeCos: Float = DEFAULT_MERGE_COS, maxClusters: Int = 6, minClusterWindows: Int = 3): ClusterResult {
         require(mergeCos.isFinite() && mergeCos in -1f..1f && maxClusters >= 1 && minClusterWindows >= 1) { "bad cluster parameters" }
         val valid = ws.indices.filter { finite(ws[it].emb) }
         val dim = valid.firstOrNull()?.let { ws[it].emb!!.size }
@@ -218,7 +220,7 @@ class ClusteredAnalysis private constructor(
     fun forTarget(target: Int): TargetAnalysis = TargetAnalysis(this, target)
 
     companion object {
-        fun of(ws: List<WindowEmbedding>, durationSec: Float, mergeCos: Float = 0.5f, maxClusters: Int = 6, minClusterWindows: Int = 3) =
+        fun of(ws: List<WindowEmbedding>, durationSec: Float, mergeCos: Float = FootageAnalysis.DEFAULT_MERGE_COS, maxClusters: Int = 6, minClusterWindows: Int = 3) =
             ClusteredAnalysis(ws, FootageAnalysis.cluster(ws, mergeCos, maxClusters, minClusterWindows), durationSec)
     }
 }
