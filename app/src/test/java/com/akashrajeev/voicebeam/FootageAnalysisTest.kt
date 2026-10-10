@@ -53,24 +53,6 @@ class FootageAnalysisTest {
         assertNull(FootageAnalysis.assignFace(act, FloatArray(40) { Float.NaN }))
     }
 
-    @Test fun autoReferenceStaysInsideTargetOnlyBins() {
-        val ws = windows(); val r = FootageAnalysis.cluster(ws)
-        val act = FootageAnalysis.binActivity(ws, r, 20f)
-        val a = r.assign[0]
-        val labels = FootageAnalysis.labelBins(act, a)
-        val ref = FootageAnalysis.autoReference(labels, FootageAnalysis.binPurity(ws, r, 20f, a), null)
-        assertNotNull(ref)
-        val total = ref!!.sumOf { (it.endSec - it.startSec).toDouble() }
-        assertTrue(total >= 3.0 && total <= 10.01)
-        for (iv in ref) for (b in (iv.startSec / 0.5f).toInt() until (iv.endSec / 0.5f).toInt())
-            assertEquals(FootageAnalysis.Seg.TARGET_ONLY, labels[b])
-    }
-
-    @Test fun autoReferenceNullWhenTooLittle() {
-        val labels = Array(40) { FootageAnalysis.Seg.OVERLAP }
-        assertNull(FootageAnalysis.autoReference(labels, FloatArray(40) { 1f }, null))
-    }
-
     @Test fun doesNotForceMergeBelowThreshold() {
         // 3 orthogonal speakers, maxClusters=2: must NOT merge them; extra cluster abstains instead
         val ws = ArrayList<WindowEmbedding>()
@@ -129,10 +111,6 @@ class FootageAnalysisTest {
         assertTrue(pb[(10f / 0.5f).toInt()] > 0f)
     }
 
-    @Test(expected = IllegalArgumentException::class) fun autoReferenceLengthMismatch() {
-        FootageAnalysis.autoReference(Array(10) { FootageAnalysis.Seg.TARGET_ONLY }, FloatArray(9) { 1f }, null)
-    }
-
     @Test(expected = IllegalArgumentException::class) fun badWindowRejected() { WindowEmbedding(2f, 1f, null) }
     @Test(expected = IllegalArgumentException::class) fun nanWindowRejected() { WindowEmbedding(Float.NaN, 1f, null) }
     @Test(expected = IllegalArgumentException::class) fun clusterResultIndexOutOfRange() { ClusterResult(intArrayOf(0, 2), 2, FloatArray(2)) }
@@ -153,5 +131,59 @@ class FootageAnalysisTest {
         val ws = windows(); val r = FootageAnalysis.cluster(ws)
         val act = FootageAnalysis.binActivity(ws, r, 20f)
         assertNull(FootageAnalysis.assignFace(act, FloatArray(40) { Float.POSITIVE_INFINITY }))
+    }
+
+    private fun oneSpeakerWindows(n: Int = 30): List<WindowEmbedding> =
+        (0 until n).map { WindowEmbedding(it * 0.5f, it * 0.5f + 1.5f, vec(0.0, (it % 3) * 0.03)) }
+
+    @Test fun autoReferenceStaysInsideTargetOnlyBins() {
+        val ws = windows(); val r = FootageAnalysis.cluster(ws); val a = r.assign[0]
+        val an = FootageAnalysis.analyze(ws, r, 20f, a)
+        assertEquals(2, an.clusterCount)
+        val ref = an.autoReference(minPurity = 0.0f)
+        assertNotNull(ref)
+        val total = ref!!.sumOf { (it.endSec - it.startSec).toDouble() }
+        assertTrue(total >= 3.0 && total <= 10.01)
+        for (iv in ref) for (b in (iv.startSec / 0.5f).toInt() until (iv.endSec / 0.5f).toInt())
+            assertEquals(FootageAnalysis.Seg.TARGET_ONLY, an.labels[b])
+    }
+
+    @Test fun singleClusterCannotHandOutReferenceWithoutLipEvidence() {
+        val ws = oneSpeakerWindows(); val r = FootageAnalysis.cluster(ws)
+        assertEquals(1, r.clusterCount)
+        val an = FootageAnalysis.analyze(ws, r, 16f, 0)
+        assertNull(an.autoReference(minPurity = 0f))
+        assertNull(an.autoReference(lipOn = BooleanArray(32) { true }, minPurity = 0f))
+        assertNotNull(an.autoReference(othersOffLip = BooleanArray(32) { true }, minPurity = 0f))
+        assertNull(an.autoReference(othersOffLip = BooleanArray(32) { false }, minPurity = 0f))
+    }
+
+    @Test fun purityGateDefaultBlocksLowPurity() {
+        val ws = windows(); val r = FootageAnalysis.cluster(ws)
+        // identical-direction windows give margin ~ big; force low gate effect via minPurity above max
+        val an = FootageAnalysis.analyze(ws, r, 20f, r.assign[0])
+        assertNull(an.autoReference(minPurity = 5f))
+    }
+
+    @Test(expected = IllegalArgumentException::class) fun analyzeRejectsTargetOutOfRange() {
+        val ws = windows(); FootageAnalysis.analyze(ws, FootageAnalysis.cluster(ws), 20f, 7)
+    }
+
+    @Test(expected = IllegalArgumentException::class) fun analyzeRejectsResultMismatch() {
+        val ws = windows(); FootageAnalysis.analyze(ws.drop(1), FootageAnalysis.cluster(ws), 20f, 0)
+    }
+
+    @Test(expected = IllegalArgumentException::class) fun lipMaskLengthMismatchRejected() {
+        val ws = windows(); val r = FootageAnalysis.cluster(ws)
+        FootageAnalysis.analyze(ws, r, 20f, 0).autoReference(lipOn = BooleanArray(5), minPurity = 0f)
+    }
+
+    @Test(expected = IllegalArgumentException::class) fun badAutoReferenceLimitsRejected() {
+        val ws = windows(); val r = FootageAnalysis.cluster(ws)
+        FootageAnalysis.analyze(ws, r, 20f, 0).autoReference(minSec = 5f, maxSec = 2f)
+    }
+    @Test(expected = IllegalArgumentException::class) fun nanPurityLimitRejected() {
+        val ws = windows(); val r = FootageAnalysis.cluster(ws)
+        FootageAnalysis.analyze(ws, r, 20f, 0).autoReference(minPurity = Float.NaN)
     }
 }
