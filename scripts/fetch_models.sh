@@ -12,11 +12,13 @@ if [ ! -f app/libs/sherpa-onnx.aar ]; then
   curl -fL -o app/libs/sherpa-onnx.aar "$REL/v$SHERPA_VERSION/sherpa-onnx-$SHERPA_VERSION.aar"
 fi
 
-# 1. Lab ASR winner on NPTEL Pure-Set: Moonshine Tiny int8 (not streaming).
-ASR=sherpa-onnx-moonshine-tiny-en-int8
+# 1. ASR: Moonshine Base int8 (MIT, not streaming). ver5c upgrade from Tiny; same four file names.
+ASR=sherpa-onnx-moonshine-base-en-int8
+ASR_SHA=21870cecaa2e44e4e2bf63e02d1072bed183ccd10284871353bd9d24dad14e5e
 if [ ! -f "$ASSETS/asr/preprocess.onnx" ]; then
   tmp=$(mktemp -d)
   curl -fL -o "$tmp/asr.tar.bz2" "$REL/asr-models/$ASR.tar.bz2"
+  echo "$ASR_SHA  $tmp/asr.tar.bz2" | sha256sum -c -
   tar -xjf "$tmp/asr.tar.bz2" -C "$tmp"
   mkdir -p "$ASSETS/asr"
   cp "$tmp/$ASR/"*.onnx "$tmp/$ASR/tokens.txt" "$ASSETS/asr/"

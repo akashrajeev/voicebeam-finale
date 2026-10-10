@@ -3,6 +3,8 @@ package com.akashrajeev.voicebeam.ml
 import android.content.res.AssetManager
 import android.util.Log
 import com.akashrajeev.voicebeam.core.Captions
+import com.akashrajeev.voicebeam.core.CaptionTrace
+import com.akashrajeev.voicebeam.engine.Diagnostics
 import com.k2fsa.sherpa.onnx.EndpointConfig
 import com.k2fsa.sherpa.onnx.EndpointRule
 import com.k2fsa.sherpa.onnx.FeatureConfig
@@ -23,6 +25,7 @@ private const val TAG = "VoiceBeamModels"
 
 /** Streaming speech-to-text (sherpa-onnx zipformer transducer, runs fully on device). */
 class Asr(assets: AssetManager) {
+    companion object { const val MODEL_NAME = "moonshine-base-en-int8" }
     private val recognizer = com.k2fsa.sherpa.onnx.OfflineRecognizer(
         assetManager = assets,
         config = com.k2fsa.sherpa.onnx.OfflineRecognizerConfig(
@@ -38,14 +41,18 @@ class Asr(assets: AssetManager) {
     )
     private val vad = NeuralVad(assets)
     private val utterance = com.akashrajeev.voicebeam.core.UtteranceBuffer(SAMPLE_RATE)
+    init { Diagnostics.event(CaptionTrace.model(MODEL_NAME)) }
     fun accept(samples: FloatArray): Pair<String, Boolean> {
         val update = utterance.accept(samples, vad.isVoice(samples)) ?: return Pair(lastText, false)
         val stream = recognizer.createStream()
+        val decodeStart = android.os.SystemClock.elapsedRealtime()
         val text = try {
             stream.acceptWaveform(update.samples, SAMPLE_RATE)
             recognizer.decode(stream)
             Captions.tidy(recognizer.getResult(stream).text)
         } finally { stream.release() }
+        if (update.ended) Diagnostics.event(CaptionTrace.utterance(MODEL_NAME, "device", android.os.SystemClock.elapsedRealtime() - decodeStart,
+            update.samples.size * 1000L / SAMPLE_RATE, text.length, null))
         lastText = if (update.ended) "" else text
         return Pair(text, update.ended)
     }

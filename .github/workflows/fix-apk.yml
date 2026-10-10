@@ -1,8 +1,8 @@
-name: enh-exp-ver5b-clarity validation and APK
+name: enh-exp-ver5c-moonshine-base validation and APK
 # One approved branch build on this workflow edit; subsequent source builds require approval.
 on:
   push:
-    branches: [enh-exp-ver5b-clarity]
+    branches: [enh-exp-ver5c-moonshine-base]
     paths: ['.github/workflows/fix-apk.yml']
   workflow_dispatch:
 permissions:
@@ -23,6 +23,20 @@ jobs:
         run: bash scripts/fetch_models.sh
       - name: Unit tests and debug APK
         run: ./gradlew --no-daemon testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
+      - name: Desktop decode check of bundled Moonshine Base (informational)
+        continue-on-error: true
+        run: |
+          pip install sherpa-onnx numpy soundfile
+          python3 - <<'PY'
+          import sherpa_onnx, soundfile as sf, glob
+          d='app/src/main/assets/models/asr/'
+          r=sherpa_onnx.OfflineRecognizer.from_moonshine(preprocessor=d+'preprocess.onnx',encoder=d+'encode.int8.onnx',uncached_decoder=d+'uncached_decode.int8.onnx',cached_decoder=d+'cached_decode.int8.onnx',tokens=d+'tokens.txt',num_threads=2)
+          import numpy as np
+          for p in sorted(glob.glob('app/src/androidTest/assets/*.wav'))[:1]:
+              x,sr=sf.read(p,dtype='float32')
+              if x.ndim>1: x=x[:,0]
+              s=r.create_stream(); s.accept_waveform(sr,x); r.decode_stream(s); print('MOONSHINE_BASE_DECODE', p, len(s.result.text), 'chars')
+          PY
       - name: Report exact source metadata and tests
         run: |
           python3 - <<'PY'
@@ -39,6 +53,9 @@ jobs:
               native=apk.read('lib/arm64-v8a/libdf.so')
               assert hashlib.sha256(native).hexdigest()=='0ec8bc3971bbb8a804b4b53910e8cad3626b9db6b4c44167eba9b669f58f0584'
               print('APK DFN gzip model and arm64 JNI bytes verified')
+              for n,sz in {'encode.int8.onnx':50311494,'uncached_decode.int8.onnx':122120451,'cached_decode.int8.onnx':99983837,'preprocess.onnx':14077290}.items():
+                  assert apk.getinfo('assets/models/asr/'+n).file_size==sz,n
+              print('APK Moonshine Base int8 file sizes verified')
           roots = [E.parse(p).getroot() for p in glob.glob('app/build/test-results/testDebugUnitTest/*.xml')]
           tests = sum(int(r.attrib['tests']) for r in roots)
           failures = sum(int(r.attrib.get('failures', '0')) + int(r.attrib.get('errors', '0')) for r in roots)
@@ -49,7 +66,7 @@ jobs:
       - name: Upload candidate APK
         uses: actions/upload-artifact@v4
         with:
-          name: enh-exp-ver5b-clarity-${{ github.sha }}
+          name: enh-exp-ver5c-moonshine-base-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 1
           if-no-files-found: error
