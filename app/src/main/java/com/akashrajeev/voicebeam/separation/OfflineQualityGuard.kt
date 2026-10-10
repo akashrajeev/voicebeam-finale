@@ -39,8 +39,9 @@ object OfflineQualityGuard {
             sourceScore/=count;outputScore/=count
             // Mixed-speaker inputs need not resemble the reference; homogeneous inputs must not lose it.
             android.util.Log.i("OfflineGuard", "sourceCosine=$sourceScore outputCosine=$outputScore chunks=$count")
-            // Recalibrated (was .4/.6/.15) on a 10-case laptop TitaNet-small distribution; data-thin, revisit with device renders.
-            return outputScore>=.35f && !(sourceScore>=.6f && outputScore<sourceScore-.45f)
+            // Recalibrated (was .4/.6/.15) on a 10-case laptop TitaNet-small distribution (fail max .293, honest min .352); data-thin, revisit with device renders.
+            // KNOWN LIMITATION: very noisy references cannot separate a good fallback (.277) from a bad render (.269) -> original shipped (safe). Future: denoise reference before guard embedding.
+            return outputScore>=.32f && !(sourceScore>=.6f && outputScore<sourceScore-.45f)
         } finally {embed.release()}
     }
 }
