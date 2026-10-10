@@ -151,7 +151,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     }
 }
 
-private fun modeLabel(m: SessionMeta): String = if (File(m.dir, "offline-reference.txt").exists()) "Offline SpeakerBeam · original retained" else when (m.mode) {
+private fun modeLabel(m: SessionMeta): String = if (File(m.dir, "offline-fallback.txt").exists()) "Original unchanged · isolation check failed" else if (File(m.dir, "offline-reference.txt").exists()) "Offline SpeakerBeam · original retained" else when (m.mode) {
     SaveMode.AUDIO -> "Audio + .srt"
     SaveMode.AUDIO_VIDEO -> "A+V · " + when (m.captions) { "burned" -> "Captions burned in"; "none" -> "No captions"; else -> ".srt file" }
     SaveMode.CAPTIONS -> "Captions only"
