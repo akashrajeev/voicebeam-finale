@@ -22,6 +22,7 @@ import com.akashrajeev.voicebeam.core.ConsentGate
 import com.akashrajeev.voicebeam.core.ConsentLog
 import com.akashrajeev.voicebeam.core.ConsentPhase
 import com.akashrajeev.voicebeam.core.ConsentResult
+import com.akashrajeev.voicebeam.core.HandObservation
 import com.akashrajeev.voicebeam.core.FaceObservation
 import com.akashrajeev.voicebeam.core.FaceTracker
 import com.akashrajeev.voicebeam.core.GateInputs
@@ -112,6 +113,7 @@ class VoiceBeamEngine(private val app: Context) {
     private var recId: String? = null
 
     init {
+        consent.requireBoth = _settings.value.requireBothConsent
         refreshSessions()
         applyStage(_settings.value.stageEnabled)
     }
@@ -183,12 +185,31 @@ class VoiceBeamEngine(private val app: Context) {
 
     /** Called with each finished caption sentence. */
     private fun consentOnSpeech(text: String) {
-        val now = SystemClock.uptimeMillis()
-        when (val r = consent.onSpeech(now, text)) {
-            is ConsentResult.Granted -> { consentLogAdd("granted", r.faceId, r.lipActive, text); lockWithConsent(r.faceId) }
-            is ConsentResult.Refused -> consentLogAdd("refused", null, null, text)
-            is ConsentResult.NeedsRetry -> consentLogAdd("retry:" + r.reason.replace(' ', '_'), consent.faceId, null, text)
-            is ConsentResult.Withdrawn -> { consentLogAdd("withdrawn_spoken", null, null, text); revokeLock() }
+        handleConsent(consent.onSpeech(SystemClock.uptimeMillis(), text), text, "spoken")
+    }
+
+    /** How often the camera should run the hand model: only while asking or locked. 0 = not at all. */
+    fun gestureIntervalMs(): Long = when (consent.phase) {
+        ConsentPhase.ASKING -> 100L
+        ConsentPhase.GRANTED -> 200L
+        else -> 0L
+    }
+
+    /** Hands seen by the gesture model (camera only). */
+    fun onHands(timeMs: Long, hands: List<HandObservation>) {
+        val faces = tracker.snapshot(timeMs).filter { timeMs - it.lastSeenMs < 400 }.map { it.id to it.box }
+        handleConsent(consent.onHands(timeMs, hands, faces), null, "thumb")
+    }
+
+    private fun handleConsent(r: ConsentResult, heard: String?, via: String) {
+        when (r) {
+            is ConsentResult.Granted -> {
+                consentLogAdd("granted_" + via, r.faceId, r.lipActive, heard); lockWithConsent(r.faceId)
+                _state.update { it.copy(consentCapturedAtMs = SystemClock.uptimeMillis()) }
+            }
+            is ConsentResult.Refused -> consentLogAdd("refused", null, null, heard)
+            is ConsentResult.NeedsRetry -> consentLogAdd("retry:" + r.reason.replace(' ', '_'), consent.faceId, null, heard)
+            is ConsentResult.Withdrawn -> { consentLogAdd("withdrawn_" + r.via, null, null, heard); revokeLock() }
             ConsentResult.Ignored -> {}
         }
         publishConsent()
@@ -206,15 +227,19 @@ class VoiceBeamEngine(private val app: Context) {
         _state.update { it.copy(lockedId = null, voiceLearned = false, voiceMatch = null, voiceEnrollmentActive = false, voiceEnrollmentProgress = 0f) }
     }
 
-    fun deleteConsentRecords() { consentLog.deleteAll(); publishConsent() }
+    @Volatile private var consentRecordCount = -1
+
+    fun deleteConsentRecords() { consentLog.deleteAll(); consentRecordCount = 0; publishConsent() }
 
     private fun consentLogAdd(event: String, faceId: Int?, lip: Float?, heard: String?) {
-        try { consentLog.add(System.currentTimeMillis(), event, faceId, lip, heard) } catch (_: Throwable) {}
+        try { consentLog.add(System.currentTimeMillis(), event, faceId, lip, heard); consentRecordCount = consentLog.count() } catch (_: Throwable) {}
     }
 
     private fun publishConsent() {
-        val n = try { consentLog.count() } catch (_: Throwable) { 0 }
-        _state.update { it.copy(consentPhase = consent.phase, consentMessage = consent.lastMessage, consentRecords = n) }
+        if (consentRecordCount < 0) consentRecordCount = try { consentLog.count() } catch (_: Throwable) { 0 }
+        val n = consentRecordCount
+        _state.update { it.copy(consentPhase = consent.phase, consentMessage = consent.lastMessage, consentRecords = n,
+            consentFaceId = consent.faceId, consentProgress = consent.gestureProgress) }
     }
 
     fun enrollmentMessage(): String = "Target: " + (learner?.enrollmentMessage ?: "Models not loaded") + " | Wearer: " + (wearerLearner?.enrollmentMessage ?: "Models not loaded")
@@ -470,6 +495,7 @@ class VoiceBeamEngine(private val app: Context) {
         val old = _settings.value
         val s = f(old)
         _settings.value = s
+        consent.requireBoth = s.requireBothConsent
         settingsStore.save(s)
         pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise }
         if (s.stageEnabled != old.stageEnabled) applyStage(s.stageEnabled)

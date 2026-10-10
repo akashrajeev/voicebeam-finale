@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.HeadsetOff
@@ -48,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -107,7 +109,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     var showSheet by remember { mutableStateOf(false) }
     val demoFeed = BuildConfig.DEBUG && settings.debugFeed
     val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER; implementationMode = PreviewView.ImplementationMode.COMPATIBLE } }
-    val analyzer = remember(demoFeed) { if (demoFeed) null else FaceAnalyzer(context.applicationContext) { t, faces, w, h -> engine.onFaces(t, faces, w, h) } }
+    val analyzer = remember(demoFeed) { if (demoFeed) null else FaceAnalyzer(context.applicationContext, { t, faces, w, h -> engine.onFaces(t, faces, w, h) }, { engine.gestureIntervalMs() }, { t, hs -> engine.onHands(t, hs) }) }
     val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val demoImage = remember(demoFeed) {
         if (!demoFeed) null else ImageView(context).apply {
@@ -230,6 +232,11 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     if (f.id == state.lockedId) {
                         drawOval(Accent.copy(alpha = 0.10f), tl - Offset(14f, 14f), GSize(sz.width + 28f, sz.height + 28f), style = Stroke(14f))
                         drawOval(Accent, tl, sz, style = Stroke(width = 3.dp.toPx() + f.speaking * 4.dp.toPx()))
+                    } else if (f.id == state.consentFaceId && state.consentPhase == com.akashrajeev.voicebeam.core.ConsentPhase.ASKING) {
+                        // Asking permission: faint full ring plus a ring that fills while a thumbs-up is held.
+                        val grow = Offset(10f, 10f)
+                        drawArc(Accent.copy(alpha = 0.25f), -90f, 360f, false, tl - grow, GSize(sz.width + 20f, sz.height + 20f), style = Stroke(8.dp.toPx()))
+                        drawArc(Accent, -90f, 360f * state.consentProgress, false, tl - grow, GSize(sz.width + 20f, sz.height + 20f), style = Stroke(8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
                     } else {
                         drawOval(Color.White.copy(alpha = 0.5f), tl, sz, style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 12f))))
                     }
@@ -238,6 +245,26 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
             // Shading for legibility.
             Box(Modifier.fillMaxWidth().height(260.dp).align(Alignment.BottomCenter)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)))))
+
+            // "Consent captured" pop-up for ~1.8 s after a lock with permission.
+            var showCaptured by remember { mutableStateOf(false) }
+            LaunchedEffect(state.consentCapturedAtMs) {
+                if (state.consentCapturedAtMs > 0L) { showCaptured = true; delay(1800); showCaptured = false }
+            }
+            val capScale by androidx.compose.animation.core.animateFloatAsState(
+                if (showCaptured) 1f else 0.5f,
+                androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 300f), label = "capScale")
+            val capAlpha by androidx.compose.animation.core.animateFloatAsState(if (showCaptured) 1f else 0f, label = "capAlpha")
+            if (capAlpha > 0.01f) {
+                Box(Modifier.align(Alignment.Center).graphicsLayer { scaleX = capScale; scaleY = capScale; alpha = capAlpha }
+                    .background(Color(0xE6101519), RoundedCornerShape(20.dp)).padding(horizontal = 24.dp, vertical = 16.dp).testTag("consent_captured")) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.CheckCircle, "consent captured", tint = Accent, modifier = Modifier.size(32.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Consent captured", color = Color.White, fontSize = 20.sp)
+                    }
+                }
+            }
 
             // Top bar.
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

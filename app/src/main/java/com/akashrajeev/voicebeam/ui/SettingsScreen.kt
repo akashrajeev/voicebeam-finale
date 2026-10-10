@@ -62,6 +62,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SwitchRow("Point mic at the scene", "Uses the camcorder mic setup, best with the back camera", s.useSceneMic) { v -> engine.updateSettings { it.copy(useSceneMic = v) } }
             SectionHeader("Captions")
             ValueRow("Language", "English")
+            SwitchRow("Require thumbs-up AND \"I agree\"", "Stricter consent: both within 5 seconds. Off = either one is enough", s.requireBothConsent) { v -> engine.updateSettings { it.copy(requireBothConsent = v) } }
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
             Text("Caption size", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
             Segmented(listOf("Small", "Medium", "Large"), s.captionSize) { i -> engine.updateSettings { it.copy(captionSize = i) } }

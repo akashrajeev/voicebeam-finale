@@ -27,12 +27,18 @@ import kotlin.math.hypot
 class FaceAnalyzer(
     context: Context,
     private val onFaces: (timeMs: Long, faces: List<FaceObservation>, width: Int, height: Int) -> Unit,
+    /** Gesture sampling interval in ms while consent is asked or a lock is active, or 0 when gestures are not needed. */
+    private val gestureIntervalMs: () -> Long = { 0L },
+    private val onHands: (timeMs: Long, hands: List<com.akashrajeev.voicebeam.core.HandObservation>) -> Unit = { _, _ -> },
 ) : ImageAnalysis.Analyzer {
 
     private var landmarker: FaceLandmarker? = null
     @Volatile private var lastW = 0
     @Volatile private var lastH = 0
     @Volatile private var busy = false
+
+    private val hands = HandGesture(context)
+    private var lastGestureMs = 0L
 
     init {
         landmarker = create(context, Delegate.GPU) ?: create(context, Delegate.CPU)
@@ -69,6 +75,12 @@ class FaceAnalyzer(
             val rot = image.imageInfo.rotationDegrees
             val upright = if (rot != 0) rotateInto(bmp, rot) else bmp
             lastW = upright.width; lastH = upright.height
+            val gi = gestureIntervalMs()
+            val nowG = SystemClock.uptimeMillis()
+            if (gi > 0 && nowG - lastGestureMs >= gi) {
+                lastGestureMs = nowG
+                onHands(nowG, hands.recognize(upright))
+            }
             busy = true
             lm.detectAsync(BitmapImageBuilder(upright).build(), SystemClock.uptimeMillis())
         } catch (t: Throwable) {
@@ -134,5 +146,5 @@ class FaceAnalyzer(
 
     val available: Boolean get() = landmarker != null
 
-    fun close() { landmarker?.close(); landmarker = null; frameBitmap = null; uprightBitmap = null }
+    fun close() { landmarker?.close(); landmarker = null; hands.close(); frameBitmap = null; uprightBitmap = null }
 }

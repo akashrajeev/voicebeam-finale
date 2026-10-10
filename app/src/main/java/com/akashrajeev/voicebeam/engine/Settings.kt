@@ -16,6 +16,7 @@ data class Settings(
     val onboarded: Boolean = false,
     val hd1080: Boolean = false,
     val debugFeed: Boolean = false,
+    val requireBothConsent: Boolean = false, // true: thumbs-up AND "I agree" within 5 s
 )
 
 class SettingsStore(context: Context) {
@@ -35,6 +36,7 @@ class SettingsStore(context: Context) {
         onboarded = p.getBoolean("onboarded", false),
         hd1080 = p.getBoolean("hd1080", false),
         debugFeed = p.getBoolean("dbgFeed", false),
+        requireBothConsent = p.getBoolean("consentBoth", false),
     )
 
     fun save(s: Settings) {
@@ -42,7 +44,7 @@ class SettingsStore(context: Context) {
             .putFloat("quiet", s.quietOthers).putFloat("boost", s.boostDb).putFloat("denoise", s.denoise)
             .putBoolean("sceneMic", s.useSceneMic).putString("saveMode", s.saveMode.name).putString("burn", s.captionBurn.name)
             .putBoolean("others", s.showOthersCaptions).putBoolean("raw", s.keepRawAudio).putBoolean("stage", s.stageEnabled)
-            .putInt("capSize", s.captionSize).putBoolean("onboarded", s.onboarded).putBoolean("hd1080", s.hd1080).putBoolean("dbgFeed", s.debugFeed)
+            .putInt("capSize", s.captionSize).putBoolean("onboarded", s.onboarded).putBoolean("hd1080", s.hd1080).putBoolean("dbgFeed", s.debugFeed).putBoolean("consentBoth", s.requireBothConsent)
             .apply()
     }
 }

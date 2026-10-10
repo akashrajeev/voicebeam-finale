@@ -48,4 +48,7 @@ data class LiveState(
     val consentPhase: ConsentPhase = ConsentPhase.IDLE,
     val consentMessage: String = "",
     val consentRecords: Int = 0,
+    val consentFaceId: Int? = null,
+    val consentProgress: Float = 0f,
+    val consentCapturedAtMs: Long = 0L,
 )
