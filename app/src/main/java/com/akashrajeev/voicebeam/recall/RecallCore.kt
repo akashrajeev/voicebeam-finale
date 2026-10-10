@@ -69,3 +69,17 @@ object RecallAudioEnergy {
         return kotlin.math.sqrt(power/samples.size)<0.0003 && peak<0.002f
     }
 }
+
+object RecallTranscriptQuality {
+    fun repeatedLoop(text: String): Boolean {
+        val words=text.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
+        // Only 3 consecutive repeats of a phrase >=5 words. Common Hindi function words remain safe.
+        for(n in 5..minOf(24,words.size/3)) {
+            for(start in 0..(words.size-3*n)) {
+                val phrase=words.subList(start,start+n)
+                if(phrase==words.subList(start+n,start+2*n) && phrase==words.subList(start+2*n,start+3*n)) return true
+            }
+        }
+        return false
+    }
+}

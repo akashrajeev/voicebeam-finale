@@ -149,7 +149,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                         Text("DAILY RECAP · SOURCE EXTRACTS",color=Mint,fontSize=12.sp)
                         recap.forEach { Text(it,color=Sand) }
                     }
-                    if(state.segments.any { it.status in listOf("retry","needs_index") }) TextButton(onClick={repo.retry()}) { Text("Retry processing") }
+                    if(state.segments.any { it.status in listOf("retry","needs_index","review") }) TextButton(onClick={repo.retry()}) { Text("Retry processing") }
                     if(state.recording && state.segments.any { it.text.isNotBlank() }) {
                         RecallPanel { Text("CATCH-UP",color=Mint,fontSize=12.sp)
                             state.segments.filter { it.text.isNotBlank() }.takeLast(3).forEach { Text(it.text,color=Sand) }
@@ -186,8 +186,9 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                             val position=state.segments.filter { it.status in listOf("queued","transcribed") }.indexOfFirst { it.id==clip.id }+1
                             Text("Queue position $position · audio safely saved",color=Mint,fontSize=12.sp)
                         }
+                        if(clip.status=="review") Text("Transcript held for review · replay or retry the original",color=Mint,fontSize=12.sp)
                         if(clip.status=="quiet") Text("Near-silence · original audio kept",color=Mint,fontSize=12.sp)
-                        if(clip.status in listOf("retry","needs_index","quiet")) TextButton(onClick={repo.retry()}) { Text("Retry this saved audio") }
+                        if(clip.status in listOf("retry","needs_index","quiet","review")) TextButton(onClick={repo.retry()}) { Text("Retry this saved audio") }
                         TextButton(onClick={replay(clip)}) { Text("▶ Replay original moment") }
                         if(clip.processingMs>0) Text("Processing time: ${clip.processingMs/1000}s · ${clip.status}",color=Color(0xFF8AABA0),fontSize=12.sp)
                         val notes=runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray())

@@ -57,4 +57,9 @@ class RecallCoreTest {
         val click=FloatArray(16000);click[300]=0.03f
         assertFalse(RecallAudioEnergy.nearSilent(click))
     }
+    @Test fun repetitionLoopRejectedButHindiRephrasingAllowed() {
+        assertTrue(RecallTranscriptQuality.repeatedLoop("I'm going to do a little bit of a dance ".repeat(10)))
+        assertFalse(RecallTranscriptQuality.repeatedLoop("मैं एक भारतीय नागरिक हूँ और मैं भारत में एक ऑनलाइन गेमिंग टूर्नामेंट में भाग लेना चाहता हूँ। मैं जानना चाहता हूँ कि क्या मैं एक भारतीय नागरिक के रूप में इस टूर्नामेंट में भाग ले सकता हूँ।"))
+        assertFalse(RecallTranscriptQuality.repeatedLoop("Please speak clearly. Please speak clearly."))
+    }
 }

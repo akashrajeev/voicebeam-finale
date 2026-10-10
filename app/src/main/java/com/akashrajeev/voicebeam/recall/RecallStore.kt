@@ -69,7 +69,7 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
         } ?: return null
         return segments(id.second).find { it.id==id.first }
     }
-    fun retryFailed() = writableDatabase.execSQL("UPDATE segments SET status=CASE WHEN text='' THEN 'queued' ELSE 'transcribed' END WHERE status IN ('retry','needs_index','quiet')")
+    fun retryFailed() = writableDatabase.execSQL("UPDATE segments SET status=CASE WHEN text='' THEN 'queued' ELSE 'transcribed' END WHERE status IN ('retry','needs_index','quiet','review')")
     fun update(id: Long, text: String? = null, status: String? = null, vector: FloatArray? = null, notes: String? = null, speaker: String? = null, processingMs: Long? = null) {
         val v = ContentValues().apply {
             processingMs?.let { put("processing_ms",it) }

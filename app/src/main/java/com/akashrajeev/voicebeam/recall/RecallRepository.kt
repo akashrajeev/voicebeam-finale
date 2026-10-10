@@ -68,7 +68,26 @@ class RecallRepository(private val context: Context) {
                         try {
                             val queued=store.segments().count { it.status in listOf("queued","transcribed") }
                             refresh("Transcribing clip ${next.id} · $queued queued",true)
-                            val text=if(next.status=="transcribed") next.text else models.transcribe(next.path)
+                            val text=if(next.status=="transcribed") next.text else {
+                                val samples=com.akashrajeev.voicebeam.core.WavWriter.read(File(next.path)).first
+                                val speech=RecallSpeechGate(context).use { it.speechOnly(samples) }
+                                if(speech==null) {
+                                    store.update(next.id,status="quiet",processingMs=android.os.SystemClock.elapsedRealtime()-started)
+                                    refresh("Clip ${next.id}: no clear speech detected; original audio kept",true)
+                                    return@withLock
+                                }
+                                val filtered=File(context.cacheDir,"recall-speech-${next.id}.wav")
+                                val result=try {
+                                    com.akashrajeev.voicebeam.core.WavWriter(filtered,16000).use { it.write(speech) }
+                                    models.transcribe(filtered.path)
+                                } finally { filtered.delete() }
+                                if(RecallTranscriptQuality.repeatedLoop(result)) {
+                                    store.update(next.id,status="review",processingMs=android.os.SystemClock.elapsedRealtime()-started)
+                                    refresh("Clip ${next.id}: repeated output held for review. Replay or retry the audio.",true)
+                                    return@withLock
+                                }
+                                if(result.trim()=="NO_SPEECH") "" else result
+                            }
                             // Save ASR before any secondary operation. Never lose a successful transcript.
                             store.update(next.id,text=text,status="transcribed")
                             val ready=next.copy(text=text,status="transcribed")
