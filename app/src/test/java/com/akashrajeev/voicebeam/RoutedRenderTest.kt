@@ -19,6 +19,11 @@ class RoutedRenderTest {
         val x = tone(2f); val out = RoutedRender.render(x, null, null, segs(4, Seg.OTHER_ONLY), sr, focusDb = -18f, xfadeSec = 0f)
         assertEquals(0.1259f, RoutedRender.rms(out) / RoutedRender.rms(x), 0.002f)
     }
+    @Test fun defaultFocusIsMinus30() {
+        assertEquals(-30f, RoutedRender.DEFAULT_FOCUS_DB, 0f)
+        val x = tone(2f); val out = RoutedRender.render(x, null, null, segs(4, Seg.OTHER_ONLY), sr, xfadeSec = 0f)
+        assertEquals(0.0316f, RoutedRender.rms(out) / RoutedRender.rms(x), 0.001f)
+    }
     @Test fun focusZeroIsNoDuck() {
         val x = tone(2f); assertArrayEquals(x, RoutedRender.render(x, null, null, segs(4, Seg.OTHER_ONLY), sr, focusDb = 0f), 1e-6f)
     }
