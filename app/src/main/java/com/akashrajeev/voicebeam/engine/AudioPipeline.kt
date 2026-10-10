@@ -42,6 +42,8 @@ class AudioPipeline(
     private var capturedSamples = 0L
     val droppedCaptionBlocks: Long get() = asrQueue.dropped
 
+    @Volatile var gateTuning = com.akashrajeev.voicebeam.core.GateTuning()
+    @Volatile var matcherDenoised = false
     var enrollmentActive: () -> Boolean = { false }
     var enrollmentStatus: () -> String = { "unknown" }
     @Volatile var quietOthers = 0.8f
@@ -263,7 +265,7 @@ class AudioPipeline(
                 if (n == 0) {
                     asrQueue.offer(CaptionBlock(input.copyOf(), capturedSamples * 1000 / SAMPLE_RATE,
                         gate.probability, rmsForCaption(input) > .005f))
-                    if (enrollmentActive()) voiceQueue.offer(Pair(input.copyOf(), 1f))
+                    if (enrollmentActive() && !matcherDenoised) voiceQueue.offer(Pair(input.copyOf(), 1f))
                     continue
                 }
                 if (clean.size < n) { clean = FloatArray(n); gated = FloatArray(n); out = FloatArray(n) }
@@ -274,6 +276,7 @@ class AudioPipeline(
                 val gateStart = SystemClock.elapsedRealtimeNanos()
                 val s = signals()
                 gate.quietOthers = quietOthers
+                gate.tuning = gateTuning.sanitized()
                 val observation = com.akashrajeev.voicebeam.core.SpeechObservation.observe(
                     enrollmentActive(), voice, rawRms, s)
                 val g = gate.process(observation.inputs)
@@ -332,7 +335,7 @@ class AudioPipeline(
                         " effectiveBoost=" + boost + " boostDb=" + boostDb + " rawRms=" + sqrt(rawEnergy / input.size) +
                         " outputRms=" + sqrt(outputEnergy / n) +
                         " micSamples=" + input.size + " level=" + sqrt(e / n) +
-                        " track=ENH tseEnabled=false enrollment=" + enrollmentStatus() +
+                        " strict="+gate.tuning.strictEnabled+" strictMode="+(if(gate.tuning.strictFull) "full" else "speech-only")+" strictResidual="+gate.tuning.residualGain+" strictHangoverMs="+gate.tuning.hangoverMs+" targetThreshold="+gate.tuning.targetThreshold+" matcherInput="+(if(matcherDenoised) "denoised" else "raw")+" voiceScoreAgeMs="+s.voiceScoreAgeMs+" voiceScoreSequence="+s.voiceScoreSequence+" voiceQuerySamples="+s.voiceQuerySamples+" track=ENH tseEnabled=false enrollment=" + enrollmentStatus() +
                         " quietOthers=" + quietOthers + " locked=" + s.hasLock + " visible=" + s.lockedVisible +
                         " lockedLips=" + s.lockedSpeaking + " otherLips=" + s.othersSpeaking +
                         " voiceMatch=" + s.voiceMatch + " wearerMatch=" + s.wearerMatch + " wearerVeto=" + s.wearerVetoEnabled + " boostAllowed=" + gate.boostAllowed +
@@ -363,7 +366,7 @@ class AudioPipeline(
                 // Recognition needs speech, not the gate's sometimes 80%-attenuated output.
                 // Assign a caption to the target separately using the gate probability.
                 com.akashrajeev.voicebeam.core.SpeechObservation.enqueue(
-                    observation, input, voiceQueue)
+                    observation, if(matcherDenoised) denoised.copyOf(n) else input, voiceQueue)
                 onFrame(FrameInfo(sqrt(e / n), g, gate.probability, voice,
                     routed?.productName?.toString().takeIf { headphoneRoute }))
                 if (com.akashrajeev.voicebeam.BuildConfig.DEBUG && ++dbgFrames % 400 == 0L) {
