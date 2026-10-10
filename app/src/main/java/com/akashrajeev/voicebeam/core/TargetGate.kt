@@ -16,6 +16,12 @@ data class GateInputs(
     val wearerMatch: Float? = null, // fresh score of deliberately enrolled wearer, optional
     val wearerVetoEnabled: Boolean = false,
     val visionAgeMs: Long = -1, // source-frame age; -1 when absent
+    val spatialAgreement: Float? = null,
+    val lockedFaceId: Int? = null,
+    val targetX: Float? = null,
+    val targetY: Float? = null,
+    val visibleFaceCount: Int = 0,
+    val voiceAgeMs: Long = -1,
     val voiceLearned: Boolean = true,
     val voiceQuerySamples: Long = 0,
     val voiceScoreAgeMs: Long = Long.MAX_VALUE,
@@ -70,6 +76,11 @@ class TargetGate(
             i.lockedVisible && i.lockedSpeaking > 0.55f -> TargetState.TARGET
             !i.lockedVisible -> TargetState.UNCERTAIN
             (i.voiceMatch ?: 0f) > tuning.targetThreshold && i.lockedSpeaking > 0.1f -> TargetState.TARGET
+            spatialEligible(i) && i.spatialAgreement == 1f &&
+                (i.voiceMatch ?: 0f) >= maxOf(.7f, tuning.targetThreshold-.1f) && i.lockedSpeaking > .35f &&
+                i.othersSpeaking < .3f -> TargetState.TARGET
+            spatialEligible(i) && i.spatialAgreement == -1f &&
+                (i.voiceMatch ?: 1f) <= .5f && i.lockedSpeaking < .3f -> TargetState.OTHER
             else -> TargetState.UNCERTAIN
         }
         if (!i.hasLock || !i.voiceLearned || !i.lockedVisible || wearerVeto(i) ||
@@ -103,6 +114,12 @@ class TargetGate(
             TargetState.UNCERTAIN -> 0f // not target-attributed; listening passes without boost
         }
     }
+
+    private fun spatialEligible(i: GateInputs): Boolean =
+        !i.audioOnly && i.hasLock && i.lockedVisible && i.voiceLearned &&
+        i.lockedFaceId != null && i.visibleFaceCount >= 2 &&
+        i.visionAgeMs in 0..399 && i.voiceAgeMs in 0..600 &&
+        i.voiceMatch?.isFinite() == true
 
     private fun wearerVeto(i: GateInputs): Boolean {
         val wearer = i.wearerMatch ?: return false
