@@ -56,8 +56,8 @@ fun BottomNav(current: Screen, onNavigate: (Screen) -> Unit) {
         Modifier.fillMaxWidth().background(Color(0xFF111418)).navigationBarsPadding().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        NavItem(Icons.Filled.CenterFocusStrong, "Focus", current == Screen.FOCUS) { onNavigate(Screen.FOCUS) }
-        NavItem(Icons.AutoMirrored.Filled.ViewList, "Sessions", current == Screen.SESSIONS) { onNavigate(Screen.SESSIONS) }
+        NavItem(Icons.Filled.CenterFocusStrong, "Listen", current == Screen.FOCUS) { onNavigate(Screen.FOCUS) }
+        NavItem(Icons.AutoMirrored.Filled.ViewList, "Recall", current == Screen.RECALL) { onNavigate(Screen.RECALL) }
         NavItem(Icons.Filled.Settings, "Settings", current == Screen.SETTINGS) { onNavigate(Screen.SETTINGS) }
     }
 }

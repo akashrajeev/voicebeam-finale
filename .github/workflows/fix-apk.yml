@@ -1,8 +1,8 @@
-name: enh-exp-ver5d-groq-online validation and APK
+name: recall-gemma-2026-10-10 validation and APK
 # One approved branch build on this workflow edit; subsequent source builds require approval.
 on:
   push:
-    branches: [enh-exp-ver5d-groq-online]
+    branches: [recall-gemma-2026-10-10]
     paths: ['.github/workflows/fix-apk.yml']
   workflow_dispatch:
 permissions:
@@ -66,7 +66,7 @@ jobs:
       - name: Upload candidate APK
         uses: actions/upload-artifact@v4
         with:
-          name: enh-exp-ver5d-groq-online-${{ github.sha }}
+          name: recall-gemma-2026-10-10-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 1
           if-no-files-found: error

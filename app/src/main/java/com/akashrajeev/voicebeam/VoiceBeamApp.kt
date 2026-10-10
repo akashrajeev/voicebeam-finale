@@ -7,6 +7,8 @@ class VoiceBeamApp : Application() {
     lateinit var engine: VoiceBeamEngine
         private set
 
+    val recall by lazy { com.akashrajeev.voicebeam.recall.RecallRepository(this) }
+
     override fun onCreate() {
         super.onCreate()
         engine = VoiceBeamEngine(this)
