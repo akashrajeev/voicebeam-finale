@@ -214,6 +214,11 @@ class VoiceBeamEngine(private val app: Context) {
         val lockedFace = faces.firstOrNull { it.id == locked }
         val others = faces.filter { it.id != locked }.maxOfOrNull { it.speaking } ?: 0f
         return GateInputs(
+            lockedFaceId = locked,
+            targetX = lockedFace?.box?.cx,
+            targetY = lockedFace?.box?.cy,
+            visibleFaceCount = faces.count { com.akashrajeev.voicebeam.core.SpeechObservation.visionFresh(now, it.lastSeenMs) },
+            voiceAgeMs = if (lastVoiceMatchAtMs > 0) now - lastVoiceMatchAtMs else -1,
             audioOnly = audioOnly,
             hasLock = locked != null,
             lockedSpeaking = if (audioOnly) 0f else lockedFace?.speaking ?: 0f,
@@ -264,11 +269,11 @@ class VoiceBeamEngine(private val app: Context) {
             }
         }) { f ->
             latestProbability = f.probability
-            _state.update { it.copy(inputLevel = f.level, gain = f.gain, targetProbability = f.probability, earphones = f.monitorRoute) }
+            _state.update { it.copy(inputLevel = f.level, gain = f.gain, targetProbability = f.probability, earphones = f.monitorRoute, spatialStatus = f.spatialStatus) }
         }
         p.enrollmentActive = { learner?.enrollmentEnabled == true || wearerLearner?.enrollmentEnabled == true }
         p.enrollmentStatus = { enrollmentMessage() }
-        p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
+        p.soloNoiseFocus = s.soloNoiseFocus; p.spatialEnabled = s.spatialEnabled; p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
         p.gateTuning = tuning(s); p.matcherDenoised = s.matcherDenoised
         pipeline = p
         pipelineDebugFeed = wantDebug
@@ -300,7 +305,7 @@ class VoiceBeamEngine(private val app: Context) {
         pipeline?.stop(); pipeline = null
         captionThread?.join(1500); voiceThread?.join(1500)
         captionThread = null; voiceThread = null
-        _state.update { it.copy(listening = false, partial = "", inputLevel = 0f) }
+        _state.update { it.copy(listening = false, partial = "", inputLevel = 0f, spatialStatus = "Not running") }
         lifecycle.finishStop()
     }
 
@@ -434,7 +439,7 @@ class VoiceBeamEngine(private val app: Context) {
             Diagnostics.event("matcher_input_changed_relearn_required")
             if(restart) startListening()
         }
-        pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise; it.gateTuning=tuning(s);it.matcherDenoised=s.matcherDenoised }
+        pipeline?.let { it.soloNoiseFocus = s.soloNoiseFocus; it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise; it.gateTuning=tuning(s);it.matcherDenoised=s.matcherDenoised }
         if (s.stageEnabled != old.stageEnabled) applyStage(s.stageEnabled)
         if (s.useSceneMic != old.useSceneMic && pipeline != null) { stopListening(); startListening() }
         // Demo feed toggles swap the audio source too (recorded wav vs mic).
