@@ -417,7 +417,7 @@ class VoiceBeamEngine(private val app: Context) {
     // ---------- settings ----------
 
     private fun tuning(s: Settings) = com.akashrajeev.voicebeam.core.GateTuning(
-        strictEnabled = s.strictFocus, residualGain = s.strictResidual,
+        strictEnabled = s.strictFocus, strictFull = s.strictFull, residualGain = s.strictResidual,
         hangoverMs = s.strictHangoverMs, targetThreshold = s.targetMatchThreshold).sanitized()
 
     fun updateSettings(f: (Settings) -> Settings) {
