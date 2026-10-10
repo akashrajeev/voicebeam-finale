@@ -4,6 +4,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.SystemClock
+import com.akashrajeev.voicebeam.core.AudioAlignment
 import java.io.File
 import java.nio.ByteOrder
 
@@ -28,7 +29,11 @@ object VideoAudioDecoder {
             ex.selectTrack(video)
             val videoStart = ex.sampleTime
             ex.unselectTrack(video); ex.selectTrack(audio)
-            require(kotlin.math.abs(ex.sampleTime - videoStart) <= 50000L) { "This video's audio/video offset is unsupported" }
+            val audioStart = ex.sampleTime
+            require(videoStart >= 0 && audioStart >= 0) { "Choose a video with an audio track" }
+            // Phone recordings often start audio a little after video. ALIGN (pad or trim) instead of rejecting; only a >2 s offset is treated as broken.
+            val offsetUs = audioStart - videoStart
+            AudioAlignment.leadingSamples(offsetUs, 16000) // throws the old "offset is unsupported" message beyond the cap
             val format = ex.getTrackFormat(audio)
             val decoder = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
             codec = decoder
@@ -80,19 +85,23 @@ object VideoAudioDecoder {
                 }
             }
             require(count > sr && (0 until count).all { samples[it].isFinite() }) { "Empty or invalid audio" }
+            // Move the audio onto the VIDEO timeline (sample-accurate at the source rate) so typed reference seconds are video seconds.
+            val aligned = AudioAlignment.align(samples, count, sr, offsetUs)
+            val alignedCount = aligned.size
             val outputSize = (duration * 16000 / 1000000).toInt()
-            require(kotlin.math.abs(count.toDouble()/sr - duration/1000000.0) <= .1) { "Audio/video lengths differ; trim your video first" }
+            // Trailing length tolerance matches the offset cap: beyond the audio end the resampler returns silence, beyond the video end it is cut.
+            require(kotlin.math.abs(alignedCount.toDouble()/sr - duration/1000000.0) <= AudioAlignment.MAX_OFFSET_US / 1e6) { "Audio/video lengths differ; trim your video first" }
             // Band-limited arbitrary-rate conversion, not live processing.
             return FloatArray(outputSize) { j ->
                 if (j % 16000 == 0 && isCancelled()) throw kotlinx.coroutines.CancellationException("Video decode cancelled")
                 val x = j.toDouble() * sr / 16000
                 val center = x.toInt(); val cutoff = minOf(1.0, 16000.0/sr) * .9
                 var sum = 0.0; var weight = 0.0
-                for (k in center-24..center+24) if (k in 0 until count) {
+                for (k in center-24..center+24) if (k in 0 until alignedCount) {
                     val t = x-k
                     val w = if (kotlin.math.abs(t)<1e-9) cutoff else kotlin.math.sin(Math.PI*cutoff*t)/(Math.PI*t)
                     val h = w * (.5+.5*kotlin.math.cos(Math.PI*t/25))
-                    sum += samples[k]*h; weight += h
+                    sum += aligned[k]*h; weight += h
                 }
                 if (weight == 0.0) 0f else (sum/weight).toFloat()
             }
