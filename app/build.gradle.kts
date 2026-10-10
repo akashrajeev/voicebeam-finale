@@ -16,12 +16,12 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.akashrajeev.voicebeam.finale"
+        applicationId = "com.akashrajeev.voicebeam.spatialrecall"
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 128
-        versionName = "RECALL-LISTEN-5"
+        versionCode = 200
+        versionName = "EXP-spatial-recall-local"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
