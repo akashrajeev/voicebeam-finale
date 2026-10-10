@@ -47,4 +47,8 @@ class FootageWindowsTest {
         val r = FootageWindows.embedWindows(FloatArray(16000 * 2), embed = { cancelled = true; floatArrayOf(1f) }, isCancelled = { cancelled })
         assertNull(r)
     }
+
+    @Test(expected = IllegalArgumentException::class) fun othersOffInfiniteThresholdRejected() {
+        FootageWindows.othersOff(listOf(floatArrayOf(0.1f)), Float.POSITIVE_INFINITY)
+    }
 }
