@@ -117,7 +117,7 @@ class VoiceBeamEngine(private val app: Context) {
         if (!loadingModels.compareAndSet(false, true)) return
         scope.launch(Dispatchers.IO) {
             try {
-                val m = AudioModels.load(app.assets)
+                val m = AudioModels.load(app.assets, listOf(app.getExternalFilesDir(null), app.filesDir))
                 models = m
                 learner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)
                 wearerLearner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)

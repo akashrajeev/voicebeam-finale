@@ -4,6 +4,7 @@ import android.content.res.AssetManager
 import android.util.Log
 import com.akashrajeev.voicebeam.core.Captions
 import com.akashrajeev.voicebeam.core.CaptionTrace
+import com.akashrajeev.voicebeam.core.GroqGuard
 import com.akashrajeev.voicebeam.engine.Diagnostics
 import com.k2fsa.sherpa.onnx.EndpointConfig
 import com.k2fsa.sherpa.onnx.EndpointRule
@@ -24,7 +25,7 @@ const val SAMPLE_RATE = 16000
 private const val TAG = "VoiceBeamModels"
 
 /** Streaming speech-to-text (sherpa-onnx zipformer transducer, runs fully on device). */
-class Asr(assets: AssetManager) {
+class Asr(assets: AssetManager, private val groq: GroqTranscriber? = null) {
     companion object { const val MODEL_NAME = "moonshine-base-en-int8" }
     private val recognizer = com.k2fsa.sherpa.onnx.OfflineRecognizer(
         assetManager = assets,
@@ -41,7 +42,10 @@ class Asr(assets: AssetManager) {
     )
     private val vad = NeuralVad(assets)
     private val utterance = com.akashrajeev.voicebeam.core.UtteranceBuffer(SAMPLE_RATE)
-    init { Diagnostics.event(CaptionTrace.model(MODEL_NAME)) }
+    init {
+        Diagnostics.event(CaptionTrace.model(MODEL_NAME))
+        Diagnostics.event(if (groq != null) "captionOnline=groq-whisper-large-v3-turbo enabled fallback=" + MODEL_NAME else "captionOnline=off reason=no_key_file")
+    }
     fun accept(samples: FloatArray): Pair<String, Boolean> {
         val update = utterance.accept(samples, vad.isVoice(samples)) ?: return Pair(lastText, false)
         val stream = recognizer.createStream()
@@ -51,10 +55,24 @@ class Asr(assets: AssetManager) {
             recognizer.decode(stream)
             Captions.tidy(recognizer.getResult(stream).text)
         } finally { stream.release() }
-        if (update.ended) Diagnostics.event(CaptionTrace.utterance(MODEL_NAME, "device", android.os.SystemClock.elapsedRealtime() - decodeStart,
-            update.samples.size * 1000L / SAMPLE_RATE, text.length, null))
+        var finalText = text
+        var path = "device"
+        var fallback: String? = null
+        var elapsed = android.os.SystemClock.elapsedRealtime() - decodeStart
+        if (update.ended && groq != null && update.samples.size >= SAMPLE_RATE * 8 / 10) {
+            val r = groq.transcribe(update.samples, SAMPLE_RATE)
+            val cloud = r.text
+            if (cloud == null) fallback = r.reason ?: "error"
+            else {
+                val rejected = GroqGuard.reject(text, cloud)
+                if (rejected != null) fallback = rejected
+                else { finalText = Captions.tidy(cloud); path = "groq"; elapsed = r.ms }
+            }
+        }
+        if (update.ended) Diagnostics.event(CaptionTrace.utterance(if (path == "groq") "groq-whisper-large-v3-turbo" else MODEL_NAME, path, elapsed,
+            update.samples.size * 1000L / SAMPLE_RATE, finalText.length, fallback))
         lastText = if (update.ended) "" else text
-        return Pair(text, update.ended)
+        return Pair(finalText, update.ended)
     }
     private var lastText = ""
     fun resetStream() { utterance.reset(); vad.reset(); lastText = "" }
@@ -145,9 +163,10 @@ class AudioModels private constructor(val asr: Asr, val denoiser: Denoiser, val 
     }
 
     companion object {
-        fun load(assets: AssetManager): AudioModels {
+        fun load(assets: AssetManager, groqKeyDirs: List<java.io.File?> = emptyList()): AudioModels {
             val t0 = System.currentTimeMillis()
-            val m = AudioModels(Asr(assets), Denoiser(assets), VoicePrint(assets))
+            val key = com.akashrajeev.voicebeam.core.GroqKey.load(groqKeyDirs)
+            val m = AudioModels(Asr(assets, key?.let { GroqTranscriber(it) }), Denoiser(assets), VoicePrint(assets))
             Log.i(TAG, "models loaded in ${System.currentTimeMillis() - t0} ms")
             return m
         }
