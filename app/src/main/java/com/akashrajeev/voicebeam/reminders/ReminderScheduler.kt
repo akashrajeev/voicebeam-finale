@@ -35,6 +35,7 @@ class ReminderReceiver : BroadcastReceiver() {
         if(c.status !in setOf("confirmed","snoozed")) return
         if(c.due==null || c.due>System.currentTimeMillis()+2000) return
         store.save(c.copy(status="ringing",occurrence=System.currentTimeMillis()))
+        (context.applicationContext as com.akashrajeev.voicebeam.VoiceBeamApp).reminders.refresh()
         runCatching { context.startForegroundService(Intent(context,ReminderAlertService::class.java).putExtra("id",id)) }.onFailure { store.save(c.copy(status="missed")) }
     }
 }

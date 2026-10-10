@@ -25,13 +25,16 @@ class ReminderAlertActivity : ComponentActivity() {
         if(Build.VERSION.SDK_INT>=27) { setShowWhenLocked(true);setTurnScreenOn(true) }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val id=intent.getStringExtra("id")?:run { finish();return }
+        (application as VoiceBeamApp).reminders.refresh()
         setContent { MaterialTheme { ReminderAlert(id) { finish() } } }
     }
 }
 @Composable fun ReminderAlert(id: String,close: ()->Unit) {
     val context=androidx.compose.ui.platform.LocalContext.current
     val app=context.applicationContext as VoiceBeamApp;val state by app.reminders.state.collectAsState()
-    val card=state.cards.find { it.id==id }
+    val card=app.reminders.store.get(id)
+    // Read through the durable card on first render; a notification can launch before a flow refresh.
+    val refreshed=state.cards.size
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var message by remember { mutableStateOf("") };var bright by remember { mutableStateOf(true) }
     val flash=context.getSharedPreferences("reminder-cues",0).getBoolean("flash",false)
