@@ -2,7 +2,7 @@ name: Footage analysis internal gates
 on:
   push:
     branches: [experiment-12]
-    paths: ['.github/workflows/footage-analysis.yml', 'app/src/main/java/com/akashrajeev/voicebeam/core/Footage*.kt', 'app/src/test/java/com/akashrajeev/voicebeam/Footage*Test.kt']
+    paths: ['.github/workflows/footage-analysis.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,7 +18,7 @@ jobs:
           java-version: '17'
       - name: Fetch pinned baseline models and runtime
         run: bash scripts/fetch_models.sh
-      - name: Compile and run all baseline and footage analysis unit tests
+      - name: Compile all baseline and cumulative stage3b footage unit tests
         run: ./gradlew --no-daemon :app:testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
       - name: Internal reports and APK
         if: always()
