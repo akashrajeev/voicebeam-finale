@@ -11,6 +11,10 @@
     <!-- INTERNET is needed only to open the local Stage Server socket (port 8765). The app makes no outgoing web requests, so cleartext traffic is off. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".VoiceBeamApp"
         android:allowBackup="false"
@@ -20,6 +24,9 @@
         android:largeHeap="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.VoiceBeam">
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <service android:name=".recall.RecallRecorderService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
