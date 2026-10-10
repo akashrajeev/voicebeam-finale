@@ -1,4 +1,4 @@
-name: Footage delivery native gates
+name: Footage delivery native gates - aligned phone audio
 on:
   push:
     branches: [experiment-12]
