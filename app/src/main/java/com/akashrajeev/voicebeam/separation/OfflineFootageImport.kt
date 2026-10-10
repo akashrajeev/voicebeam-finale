@@ -183,19 +183,19 @@ object OfflineFootageGuard {
         val embed = VoicePrint(context.assets)
         try {
             val r = embed.embed(ref) ?: return false
-            var sourceScore = 0f; var outputScore = 0f; var count = 0
+            val srcScores = ArrayList<Float>(); val outScores = ArrayList<Float>()
             for (a in source.indices step 48000) {
                 val b = minOf(a + 48000, source.size)
                 if (b - a < 16000) continue
                 if (!FinalAudioGuardMath.chunkQualifies(labels, speech, a, b)) continue
                 val s = embed.embed(source.copyOfRange(a, b)) ?: return false
                 val y = embed.embed(finalAudio.copyOfRange(a, b)) ?: return false
-                sourceScore += VoiceMatch.cosine(s, r); outputScore += VoiceMatch.cosine(y, r); count++
+                srcScores.add(VoiceMatch.cosine(s, r)); outScores.add(VoiceMatch.cosine(y, r))
             }
-            if (count == 0) return false
-            sourceScore /= count; outputScore /= count
-            android.util.Log.i("OfflineFootageGuard", "sourceCosine=$sourceScore outputCosine=$outputScore chunks=$count")
-            return FinalAudioGuardMath.pass(sourceScore, outputScore, count)
+            if (outScores.isEmpty()) return false
+            android.util.Log.i("OfflineFootageGuard", "sourceCosine=${srcScores.average()} outputCosine=${outScores.average()} chunks=${outScores.size} chunkScores=$outScores")
+            // Routed renders get NO per-chunk floor: legitimately ducked other-speaker chunks score ~0 vs the target reference. Bad plans are caught by PLAN_UNSTABLE.
+            return FinalAudioGuardMath.pass(srcScores.average().toFloat(), outScores.average().toFloat(), outScores.size)
         } finally { embed.release() }
     }
 }
