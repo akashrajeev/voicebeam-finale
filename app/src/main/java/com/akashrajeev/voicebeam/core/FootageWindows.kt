@@ -13,6 +13,7 @@ object FootageWindows {
         samples: FloatArray, sampleRate: Int = 16000,
         embed: (FloatArray) -> FloatArray?,
         isCancelled: () -> Boolean = { false },
+        eligible: (startSample: Int, endSample: Int) -> Boolean = { _, _ -> true },
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): List<WindowEmbedding>? {
         val win = (WIN_SEC * sampleRate).toInt(); val hop = (HOP_SEC * sampleRate).toInt()
@@ -23,12 +24,20 @@ object FootageWindows {
         for (n in 0 until total) {
             if (isCancelled()) return null
             val a = n * hop
-            val e = embed(samples.copyOfRange(a, a + win))
+            val e = if (eligible(a, a + win)) embed(samples.copyOfRange(a, a + win)) else null // ineligible = abstained, no embed cost
             if (isCancelled()) return null // recheck after a slow embed returns
             out.add(WindowEmbedding(a.toFloat() / sampleRate, (a + win).toFloat() / sampleRate, e))
             onProgress(n + 1, total)
         }
         return out
+    }
+
+    /** Fraction of 512-sample VAD frames flagged speech in [a, b). Windows under 50% are not eligible for clustering or reference. */
+    fun speechCoverage(speech: BooleanArray, a: Int, b: Int): Float {
+        require(a in 0 until b) { "bad range" }
+        val first = a / 512; val last = minOf(speech.size, (b + 511) / 512)
+        require(last > first) { "speech flags do not cover the range" }
+        return (first until last).count { speech[it] }.toFloat() / (last - first)
     }
 
     /**
