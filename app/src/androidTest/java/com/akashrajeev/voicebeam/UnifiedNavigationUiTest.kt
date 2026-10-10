@@ -29,6 +29,9 @@ class UnifiedNavigationUiTest {
         compose.setContent { VoiceBeamTheme { SessionsScreen(app.engine,onNavigate={}) } }
         compose.onNodeWithText("Video & sessions").assertExists()
         compose.onNodeWithText("Custom video - offline isolation").assertExists()
+        compose.onNodeWithText("1  Choose your video").assertExists()
+        compose.onNodeWithText("2  Mark 3-10 seconds of the target alone").assertExists()
+        compose.onNodeWithText("3  Isolate locally, then play both versions").assertExists()
         compose.onNodeWithTag("pickOfflineVideo").assertIsEnabled()
         compose.onNodeWithText("Video").assertExists()
         val file=File(context.getExternalFilesDir(null),"unified-video-navigation.png")
