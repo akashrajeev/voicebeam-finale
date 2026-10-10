@@ -122,6 +122,7 @@ fun SessionsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
                             }
                             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Chip("Export", color = Accent.copy(alpha = 0.2f)) { share(context, m) }
+                                if(File(m.dir,"footage-report.txt").exists()) Chip("Share report", color=Card2) { shareReport(context,File(m.dir,"footage-report.txt")) }
                                 Chip("Rename", color = Card2) { renaming = m }
                                 Chip("Delete", color = Color(0x33FF4D4F)) { deleting = m }
                             }
@@ -171,7 +172,7 @@ private fun openFile(context: Context, f: File, mime: String) {
 }
 
 private fun share(context: Context, m: SessionMeta) {
-    val files = listOf(m.video, m.cleanAudio, m.srt, m.txt, m.rawWav).filter { it.exists() && it.length() > 0 }
+    val files = listOf(m.video, m.cleanAudio, m.srt, m.txt, m.rawWav, File(m.dir,"footage-report.txt"), File(m.dir,"offline-fallback.txt")).filter { it.exists() && it.length() > 0 }
     if (files.isEmpty()) return
     val uris = ArrayList(files.map { uriFor(context, it) })
     val i = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
@@ -181,4 +182,14 @@ private fun share(context: Context, m: SessionMeta) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(i, "Export " + m.title))
+}
+
+private fun shareReport(context: Context, report: File) {
+    val uri=uriFor(context,report)
+    val intent=Intent(Intent.ACTION_SEND).apply {
+        type="text/plain"; putExtra(Intent.EXTRA_STREAM,uri)
+        clipData=ClipData.newRawUri(report.name,uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(intent,"Share offline isolation report"))
 }
