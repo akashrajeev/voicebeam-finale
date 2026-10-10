@@ -42,5 +42,30 @@ object RecallGrounding {
 
 data class RecallSegment(val id: Long, val session: Long, val start: Long, val duration: Long,
     val path: String, val text: String, val status: String, val speaker: String,
-    val vector: FloatArray? = null, val notes: String = "[]")
+    val vector: FloatArray? = null, val notes: String = "[]", val processingMs: Long = 0L)
 data class RecallSession(val id: Long, val start: Long, val title: String)
+
+/** Byte budget is conservative for multilingual byte-fallback tokenization; no text is discarded. */
+object RecallTextSlices {
+    fun split(text: String, maxBytes: Int = 600): List<String> {
+        require(maxBytes>=4)
+        val out=mutableListOf<String>();val part=StringBuilder();var bytes=0;var pos=0
+        while(pos<text.length) {
+            val cp=text.codePointAt(pos);val unit=String(Character.toChars(cp));val n=unit.toByteArray(Charsets.UTF_8).size
+            if(bytes+n>maxBytes) { out+=part.toString();part.setLength(0);bytes=0 }
+            part.append(unit);bytes+=n;pos+=Character.charCount(cp)
+        }
+        if(part.isNotEmpty()) out+=part.toString()
+        return out
+    }
+}
+
+/** Conservative near-silence only. This is not speaker identity or a speech/noise classifier. */
+object RecallAudioEnergy {
+    fun nearSilent(samples: FloatArray): Boolean {
+        if(samples.isEmpty()) return true
+        var power=0.0;var peak=0f
+        samples.forEach { v -> power+=v*v;peak=maxOf(peak,kotlin.math.abs(v)) }
+        return kotlin.math.sqrt(power/samples.size)<0.0003 && peak<0.002f
+    }
+}

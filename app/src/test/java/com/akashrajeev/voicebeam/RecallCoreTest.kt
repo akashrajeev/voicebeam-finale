@@ -43,4 +43,18 @@ class RecallCoreTest {
         RecallGrounding.cosine(floatArrayOf(1f),floatArrayOf(1f,2f))
     }
     @Test(expected=IllegalArgumentException::class) fun clipsOverAudioLimitAreRejected() { RecallChunker(seconds=31) }
+    @Test fun oversizedEmbeddingInputIsSplitWithoutLoss() {
+        val text="Malayalam മലയാളം Gemma 🌟 ".repeat(500)
+        val parts=RecallTextSlices.split(text)
+        assertEquals(text,parts.joinToString(""))
+        assertTrue(parts.size>1)
+        assertTrue(parts.all { it.toByteArray(Charsets.UTF_8).size<=600 })
+        assertTrue(parts.none { it.contains('\uFFFD') })
+    }
+    @Test fun nearSilentGateDoesNotRejectQuietAudibleSamples() {
+        assertTrue(RecallAudioEnergy.nearSilent(FloatArray(16000)))
+        assertFalse(RecallAudioEnergy.nearSilent(FloatArray(16000) { 0.003f }))
+        val click=FloatArray(16000);click[300]=0.03f
+        assertFalse(RecallAudioEnergy.nearSilent(click))
+    }
 }

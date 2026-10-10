@@ -177,10 +177,23 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                 val clips=state.segments.filter { it.session==selected }
                 items(clips,key={it.id}) { clip ->
                     var speaker by rememberSaveable(clip.id) { mutableStateOf(clip.speaker) }
+                    var notesOpen by rememberSaveable(clip.id) { mutableStateOf(false) }
+                    var transcriptOpen by rememberSaveable(clip.id) { mutableStateOf(false) }
+                    var speakerOpen by rememberSaveable(clip.id) { mutableStateOf(false) }
                     RecallPanel {
                         Text("SOURCE ${clip.id} · ${clip.start/1000}s · ${clip.duration/1000}s",color=Mint,fontSize=12.sp)
+                        if(clip.status in listOf("queued","transcribed")) {
+                            val position=state.segments.filter { it.status in listOf("queued","transcribed") }.indexOfFirst { it.id==clip.id }+1
+                            Text("Queue position $position · audio safely saved",color=Mint,fontSize=12.sp)
+                        }
+                        if(clip.status=="quiet") Text("Near-silence · original audio kept",color=Mint,fontSize=12.sp)
+                        if(clip.status in listOf("retry","needs_index","quiet")) TextButton(onClick={repo.retry()}) { Text("Retry this saved audio") }
+                        TextButton(onClick={replay(clip)}) { Text("▶ Replay original moment") }
+                        if(clip.processingMs>0) Text("Processing time: ${clip.processingMs/1000}s · ${clip.status}",color=Color(0xFF8AABA0),fontSize=12.sp)
                         val notes=runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray())
-                        for(i in 0 until notes.length()) {
+                        TextButton(onClick={notesOpen=!notesOpen}) { Text("${if(notesOpen) "▾" else "▸"} Extracted notes (${notes.length()})") }
+                        if(!notesOpen && notes.length()>0) Text(notes.getJSONObject(0).optString("quote").take(180),color=Sand)
+                        if(notesOpen) for(i in 0 until notes.length()) {
                             val n=notes.getJSONObject(i)
                             Text(n.optString("kind").replace('_',' ').uppercase(),color=Mint,fontSize=11.sp)
                             Text(n.optString("quote"),color=Sand,fontWeight=FontWeight.SemiBold)
@@ -192,19 +205,21 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                                 else playbackError="Open your calendar to add this reminder"
                             }) { Text("Add reminder") }
                         }
-                        Text("ORIGINAL TRANSCRIPT",color=Color(0xFF8AABA0),fontSize=11.sp)
-                        Text(clip.text.ifBlank { "Audio saved · ${clip.status}" },color=Sand)
+                        TextButton(onClick={transcriptOpen=!transcriptOpen}) { Text("${if(transcriptOpen) "▾" else "▸"} Original transcript") }
+                        Text(if(transcriptOpen) clip.text.ifBlank { "Audio saved · ${clip.status}" } else clip.text.take(140).ifBlank { "Audio saved · ${clip.status}" },color=Sand)
                         if(clip.speaker.isNotBlank()) Text(clip.speaker,color=Mint)
-                        TextButton(onClick={replay(clip)}) { Text("▶ Replay original moment") }
-                        OutlinedTextField(speaker,{speaker=it},label={Text("Name this speaker")},modifier=Modifier.fillMaxWidth())
-                        TextButton(onClick={repo.nameSpeaker(clip.id,speaker);speaker=""}) { Text("Save speaker name") }
+                        if(clip.text.isNotBlank()) TextButton(onClick={speakerOpen=!speakerOpen}) { Text("${if(speakerOpen) "▾" else "▸"} Speaker name") }
+                        if(speakerOpen && clip.text.isNotBlank()) {
+                            OutlinedTextField(speaker,{speaker=it},label={Text("Name this speaker")},modifier=Modifier.fillMaxWidth())
+                            TextButton(onClick={repo.nameSpeaker(clip.id,speaker);speakerOpen=false}) { Text("Save speaker name") }
+                        }
                     }
                 }
             }
             if(page=="ask") {
                 item {
                     OutlinedTextField(question,{question=it},label={Text("Ask a question")},modifier=Modifier.fillMaxWidth())
-                    Button(onClick={repo.ask(question,selected)},enabled=state.modelsReady&&!state.busy&&question.isNotBlank()) { Text("Find answer") }
+                    Button(onClick={repo.ask(question,selected)},enabled=state.modelsReady&&!state.asking&&question.isNotBlank()) { Text("Find answer") }
                     Text(if(selected==null) "All conversations" else "This conversation",color=Mint,fontSize=12.sp)
                 }
                 items(state.answers,key={it.id}) { source -> RecallPanel {

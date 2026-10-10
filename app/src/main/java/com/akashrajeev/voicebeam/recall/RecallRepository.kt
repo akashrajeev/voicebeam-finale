@@ -11,7 +11,7 @@ import kotlinx.coroutines.sync.withLock
 
 data class RecallUiState(val recording: Boolean = false, val message: String = "Ready to remember",
     val sessions: List<RecallSession> = emptyList(), val segments: List<RecallSegment> = emptyList(),
-    val modelsReady: Boolean = false, val busy: Boolean = false, val answers: List<RecallSegment> = emptyList())
+    val modelsReady: Boolean = false, val busy: Boolean = false, val asking: Boolean = false, val answers: List<RecallSegment> = emptyList())
 
 class RecallRepository(private val context: Context) {
     val store = RecallStore(context)
@@ -50,12 +50,13 @@ class RecallRepository(private val context: Context) {
         val file=File(dir,"${session}-${start}-${System.nanoTime()}.wav")
         com.akashrajeev.voicebeam.core.WavWriter(file,16000).use { it.write(samples) }
         val id=store.add(session,start,samples.size*1000L/16000,file)
+        if(RecallAudioEnergy.nearSilent(samples)) store.update(id,status="quiet")
         refresh();process();return id
     }
     @Synchronized fun process() {
         if(worker?.isActive==true || !RecallModelFiles.ready(context)) return
         worker=scope.launch {
-            refresh("Processing on this phone",true)
+            refresh("Loading local models",true)
             var completed=false
             try {
                 inference.withLock { models.initialize() }
@@ -63,21 +64,28 @@ class RecallRepository(private val context: Context) {
                     val next=store.nextQueued()?:break
                     inference.withLock {
                         models.initialize()
+                        val started=android.os.SystemClock.elapsedRealtime()
                         try {
+                            val queued=store.segments().count { it.status in listOf("queued","transcribed") }
+                            refresh("Transcribing clip ${next.id} · $queued queued",true)
                             val text=if(next.status=="transcribed") next.text else models.transcribe(next.path)
                             // Save ASR before any secondary operation. Never lose a successful transcript.
                             store.update(next.id,text=text,status="transcribed")
                             val ready=next.copy(text=text,status="transcribed")
                             if(text.isNotBlank()) {
-                                val vector=models.embedding(text)
-                                store.update(next.id,vector=vector)
+                                refresh("Indexing clip ${next.id} · $queued queued",true)
+                                val slices=models.indexSlices(text)
+                                store.index(next.id,slices)
+                                refresh("Extracting notes · clip ${next.id} · $queued queued",true)
                                 val notes=models.notes(ready)
                                 store.update(next.id,notes=notes)
                             }
-                            store.update(next.id,status="ready");refresh()
+                            val elapsed=android.os.SystemClock.elapsedRealtime()-started
+                            store.update(next.id,status="ready",processingMs=elapsed)
+                            refresh("Clip ${next.id} processed in ${elapsed/1000}s",true)
                         } catch(t: Exception) {
                             store.update(next.id,status=if(store.segments().find { it.id==next.id }?.text?.isNotBlank()==true) "needs_index" else "retry")
-                            refresh("Clip ${next.id}: ${t.message?:"retry needed"}")
+                            refresh("Clip ${next.id} saved. Processing needs retry; later clips will continue.",true)
                         }
                     }
                 }
@@ -103,22 +111,33 @@ class RecallRepository(private val context: Context) {
     }
     fun ask(question: String, session: Long? = null) = scope.launch {
         if(question.isBlank()) return@launch
-        synchronized(this@RecallRepository) { _state.value=_state.value.copy(answers=emptyList()) }
+        synchronized(this@RecallRepository) {
+            if(_state.value.asking) return@launch
+            _state.value=_state.value.copy(answers=emptyList(),asking=true)
+        }
         refresh("Finding the source",true)
         try {
             val answers=inference.withLock {
                 models.initialize()
+                require(question.toByteArray().size<=600) { "Please shorten the question and try again" }
                 val query=models.embedding(question,true)
-                val sources=store.segments(session).filter { it.text.isNotBlank() && it.vector!=null }
-                    .sortedByDescending { RecallGrounding.cosine(query,it.vector!!) }.take(6)
+                val sources=store.search(query,session)
                 if(sources.isEmpty()) emptyList() else models.answer(question,sources)
             }
             synchronized(this@RecallRepository) { _state.value=_state.value.copy(answers=answers) }
             refresh(if(answers.isEmpty()) "Record a relevant conversation to find the answer" else "Answers from your transcript",false)
         } catch(t: Exception) { refresh(t.message?:"Try your question again",false) }
+        finally { synchronized(this@RecallRepository) { _state.value=_state.value.copy(asking=false) } }
     }
     fun rename(session: Long, title: String) = scope.launch { store.rename(session,title);refresh() }
-    fun nameSpeaker(id: Long, speaker: String) = scope.launch { store.update(id,speaker=speaker.trim().take(80));refresh() }
+    fun nameSpeaker(id: Long, speaker: String) = scope.launch {
+        val name=speaker.trim().take(80)
+        store.update(id,speaker=name)
+        synchronized(this@RecallRepository) {
+            _state.value=_state.value.copy(segments=_state.value.segments.map { if(it.id==id) it.copy(speaker=name) else it },message="Speaker name saved")
+        }
+        refresh("Speaker name saved")
+    }
     fun delete(session: Long) = scope.launch {
         if(state.value.recording) { refresh("Pause recording to manage saved conversations");return@launch }
         inference.withLock {
