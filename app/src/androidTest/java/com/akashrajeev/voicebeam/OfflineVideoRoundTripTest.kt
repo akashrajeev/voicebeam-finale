@@ -68,6 +68,7 @@ class OfflineVideoRoundTripTest {
             session=OfflineVideoImport.run(context,Uri.fromFile(input),0.0,2.0)
             assertArrayEquals(hash,java.security.MessageDigest.getInstance("SHA-256").digest(input.readBytes()))
             assertArrayEquals(hash,java.security.MessageDigest.getInstance("SHA-256").digest(File(session.dir,"original.mp4").readBytes()))
+            assertFalse("Known clean reference must not silently fallback",File(session.dir,"offline-fallback.txt").exists())
             assertTrue(session.video.length()>0);assertTrue(File(session.dir,"offline-reference.txt").exists())
             val ex=MediaExtractor()
             try {
