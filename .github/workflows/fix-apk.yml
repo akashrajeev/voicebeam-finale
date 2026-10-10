@@ -37,7 +37,8 @@ jobs:
           export VB_RECALL_KEY_PASSWORD="$(cat "$RUNNER_TEMP/recall-password")"
           trap 'rm -f "$VB_RECALL_KEYSTORE" "$RUNNER_TEMP/recall-password"' EXIT
           ./gradlew --no-daemon testDebugUnitTest assembleDebug -Dorg.gradle.jvmargs="-Xmx3g"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/recall-signer.txt"
+          grep -F 'Signer #1 certificate SHA-256 digest: 2e35a6f03098d369b373cc119fe3aa9f957393485a7ee0f8af4542ddd83e6148' "$RUNNER_TEMP/recall-signer.txt"
       - name: Desktop decode check of bundled Moonshine Base (informational)
         continue-on-error: true
         run: |
