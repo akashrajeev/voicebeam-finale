@@ -20,8 +20,8 @@ android {
         minSdk = 26
         targetSdk = 35
         buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 125
-        versionName = "RECALL-FOOTAGE-2"
+        versionCode = 126
+        versionName = "RECALL-FOOTAGE-3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
