@@ -20,9 +20,9 @@ class ReminderScheduler(private val context: Context) {
         alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,intent(card))
     }
     fun cancel(card: ReminderCard) { alarms.cancel(intent(card)) }
-    fun restore() {
+    fun restore(onlyPending: Boolean=false) {
         val store=ReminderStore(context)
-        for(c in store.all().filter { it.status in setOf("confirmed","snoozed","needs_permission","ringing") && it.due!=null }) {
+        for(c in store.all().filter { it.status in (if(onlyPending) setOf("needs_permission") else setOf("confirmed","snoozed","needs_permission")) && it.due!=null }) {
             val next=if(readiness()!=null) c.copy(status="needs_permission") else c.copy(status=if(c.status=="snoozed") "snoozed" else "confirmed",due=maxOf(c.due!!,System.currentTimeMillis()+1500))
             store.save(next);if(next.status!="needs_permission") runCatching { schedule(next) }.onFailure { store.save(next.copy(status="needs_permission")) }
         }

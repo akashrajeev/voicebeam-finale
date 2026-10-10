@@ -13,8 +13,16 @@ import java.io.File
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
     @Test fun reviewAlertAndPersistence() {
         val app=compose.activity.application as VoiceBeamApp
+        compose.mainClock.autoAdvance=true
         compose.runOnUiThread { compose.activity.setContent { ReminderScreen {} } }
-        compose.waitForIdle();shot("reminders-home")
+        compose.waitForIdle();compose.onNodeWithText("Set an alert").assertIsDisplayed();shot("reminders-home")
+        compose.onNodeWithText("Set an alert").performClick();compose.waitForIdle()
+        val what=compose.onAllNodes(hasSetTextAction()).onFirst()
+        what.performTextInput("Bring the blood report tomorrow")
+        what.assertTextContains("Bring the blood report tomorrow")
+        compose.waitForIdle();shot("reminders-manual-multiword")
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Keep for later"));compose.onNodeWithText("Keep for later").performClick();compose.waitForIdle()
+        app.reminders.store.all().filter { it.id!="test-card" }.forEach { app.reminders.cancel(it.id) }
         val c=ReminderCard("test-card",System.currentTimeMillis(),"","Come back in two weeks and bring the report.",mapOf("what" to ReminderField("Come back","Come back"),"when" to ReminderField("in two weeks","in two weeks"),"bring" to ReminderField("report","bring the report")))
         app.reminders.store.save(c);app.reminders.refresh()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Review and confirm"));compose.onNodeWithText("Review and confirm").performClick();compose.waitUntil(5000) { compose.onAllNodesWithText("Did I understand?").fetchSemanticsNodes().isNotEmpty() };compose.onNode(hasScrollAction()).performScrollToNode(hasText("Did I understand?"));compose.waitForIdle();shot("reminders-confirm")
@@ -37,15 +45,19 @@ import java.io.File
         app.reminders.refresh()
         // Verify the actual dedicated Activity, not only service/state. FSI may become a heads-up notification.
         compose.runOnUiThread { compose.activity.startActivity(android.content.Intent(app,ReminderAlertActivity::class.java).putExtra("id",alarm.id)) }
+        compose.mainClock.autoAdvance=true
+        compose.waitForIdle()
         val device=InstrumentationRegistry.getInstrumentation().uiAutomation
         val limit=android.os.SystemClock.elapsedRealtime()+8000
         var found=false
         while(android.os.SystemClock.elapsedRealtime()<limit && !found) {
-            found=device.rootInActiveWindow?.findAccessibilityNodeInfosByText("OK, I see it")?.isNotEmpty()==true
+            compose.mainClock.advanceTimeBy(100)
+            found=compose.onAllNodesWithText("OK, I see it").fetchSemanticsNodes().isNotEmpty()
             if(!found) Thread.sleep(100)
         }
-        assertTrue("Actual alert Activity must render its acknowledgement button",found)
         shot("reminders-scheduled-alert")
+        File(app.getExternalFilesDir(null),"alert-accessibility.txt").writeText(device.rootInActiveWindow?.toString().orEmpty())
+        assertTrue("Actual alert Activity must render its acknowledgement button",found)
         compose.runOnUiThread { app.startService(android.content.Intent(app,ReminderAlertService::class.java).setAction(ReminderAlertService.SNOOZE).putExtra("id",alarm.id)) }
         compose.waitUntil(5000) { ReminderStore(app).get(alarm.id)?.status=="snoozed" }
         assertTrue(ReminderStore(app).get(alarm.id)!!.due!!>System.currentTimeMillis()+500000)

@@ -24,4 +24,20 @@ class ReminderCoreTest {
     @Test fun malformedJsonRejected() { assertThrows(Exception::class.java) { ReminderGrounding.extract("not json","instruction") } }
     @Test fun emptyTranscriptRejectsAll() { assertTrue(ReminderGrounding.extract("[]","").isEmpty()) }
     @Test fun zeroIntervalRejected() { assertThrows(Exception::class.java) { ReminderGrounding.nextOccurrence(1,0,10) } }
+
+    @Test fun explicitSpeechTime() {
+        val z=ZoneId.of("Asia/Kolkata");val n=java.time.Instant.parse("2026-10-10T12:00:00Z").toEpochMilli()
+        assertEquals(ReminderGrounding.localTime("2026-10-10","20:00",z),ReminderTime.resolve("today at 8 pm",n,z).due)
+        assertEquals(n+120000,ReminderTime.resolve("in 2 minutes",n,z).due)
+        assertEquals(n+120000,ReminderTime.resolve("in two minutes",n,z).due)
+        assertNull(ReminderTime.resolve("maybe in two minutes",n,z).due)
+        assertNull(ReminderTime.resolve("in twenty two minutes",n,z).due)
+        assertNull(ReminderTime.resolve("in 2 minutes after the bus arrives",n,z).due)
+        assertNull(ReminderTime.resolve("today at 18 am",n,z).due)
+        assertNull(ReminderTime.resolve("tomorrow at 8 am after breakfast",n,z).due)
+        assertNull(ReminderTime.resolve("at 8",n,z).due);assertNull(ReminderTime.resolve("at 8 pm",n,z).due)
+        assertNull(ReminderTime.resolve("twice a day after food",n,z).due)
+        assertNull(ReminderTime.resolve("today at 8 pm or 9 pm",n,z).due)
+        assertNull(ReminderTime.resolve("today at 8 am",n,z).due)
+    }
 }

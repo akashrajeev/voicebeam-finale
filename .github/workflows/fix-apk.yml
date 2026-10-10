@@ -1,5 +1,5 @@
 name: Reminders Bright Paper lab validation and APK
-# REMINDERS-1.1: prompt echo quarantine and cancellable recap deadlines. Branch/artifacts only.
+# REMINDERS-1.2: auto-set, visible manual entry, inline alert access, stable multi-word editing. Branch/artifacts only.
 on:
   push:
     branches: [reminders-brightpaper-2026-10-10]
@@ -79,14 +79,14 @@ jobs:
           print(f'{tests} JVM tests; {failures} failures/errors. Debug APK built. Phone test separate.')
           PY
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | head -1 | tee "$RUNNER_TEMP/recall-version.txt"
-          grep -F "versionCode='126' versionName='REMINDERS-1.1'" "$RUNNER_TEMP/recall-version.txt"
+          grep -F "versionCode='127' versionName='REMINDERS-1.2'" "$RUNNER_TEMP/recall-version.txt"
           sha256sum app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/VoiceBeam-REMINDERS-1.1.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/VoiceBeam-REMINDERS-1.2.apk
       - name: Upload candidate APK
         uses: actions/upload-artifact@v4
         with:
-          name: VoiceBeam-REMINDERS-1.1-${{ github.sha }}
-          path: app/build/outputs/apk/debug/VoiceBeam-REMINDERS-1.1.apk
+          name: VoiceBeam-REMINDERS-1.2-${{ github.sha }}
+          path: app/build/outputs/apk/debug/VoiceBeam-REMINDERS-1.2.apk
           retention-days: 1
           if-no-files-found: error
 
