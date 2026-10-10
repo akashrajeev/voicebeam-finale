@@ -34,6 +34,14 @@ jobs:
           script: |
             trap 'adb logcat -d -s OffsetFixture:I > offset-container-log.txt' EXIT
             ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.OffsetContainerTest -Dorg.gradle.jvmargs="-Xmx3g"
+      - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          VB_EMULATOR: '1'
+        with:
+          api-level: 29
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.UnifiedNavigationUiTest,com.akashrajeev.voicebeam.OfflineExtractorTest,com.akashrajeev.voicebeam.OfflineImportUiTest,com.akashrajeev.voicebeam.OfflineVideoRoundTripTest,com.akashrajeev.voicebeam.FootageImportRoundTripTest#importPreservesOriginalAndExportsSynchronizedVideo,com.akashrajeev.voicebeam.FootageImportRoundTripTest#cancelBeforeExtractionDoesNotWriteOutput -Dorg.gradle.jvmargs="-Xmx3g"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
