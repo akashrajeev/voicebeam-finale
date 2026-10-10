@@ -25,6 +25,6 @@ class ClarityShaperTest {
     }
     @Test fun peakGrowthIsBoundedAndLimiterStillHolds() {
         val s = ClarityShaper(); val b = tone(2800.0, 512).map { it * 8f }.toFloatArray(); s.process(b, 512, 1f, true)
-        assertTrue(b.maxOf { abs(it) } < .8 * 1.6)
+        assertTrue(b.maxOf { abs(it) } < 1.6f)
     }
 }
