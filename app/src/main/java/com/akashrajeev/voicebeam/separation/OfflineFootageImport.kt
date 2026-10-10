@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.akashrajeev.voicebeam.core.AbstainReason
 import com.akashrajeev.voicebeam.core.FinalAudioGuardMath
+import com.akashrajeev.voicebeam.core.TargetEvidence
 import com.akashrajeev.voicebeam.core.FootageAnalysis
 import com.akashrajeev.voicebeam.core.FootageRenderPipeline
 import com.akashrajeev.voicebeam.core.FootageWindows
@@ -25,7 +26,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
-enum class FootageStage { COPY, DECODE, VAD, EMBED, EXTRACT, RENDER, MUX }
+enum class FootageStage { COPY, DECODE, VAD, DENOISE, EMBED, EXTRACT, RENDER, MUX }
 
 sealed class FootageResult {
     /** [routed] true = routed render shipped; false = the unchanged exp-10 path ran (see [note]). */
@@ -43,7 +44,11 @@ object OfflineFootageImport {
     /** Only the 16 kHz mono ceiling is honest here: the extractor is 8 kHz-class and no band split exists yet. */
     suspend fun run(
         context: Context, uri: Uri, tapStart: Double?, tapEnd: Double?,
-        onProgress: (FootageStage, Float) -> Unit = { _, _ -> }
+        onProgress: (FootageStage, Float) -> Unit = { _, _ -> },
+        /** Denoise a COPY of the audio before embedding windows. Render and guards always use the original. Failure falls back to raw embeddings (the stability gate and guard still apply). */
+        denoiseFrontEnd: Boolean = true,
+        /** Extractor-health relabel of TARGET_ONLY bins (TargetEvidence). OFF until eval's false-flag numbers land. */
+        targetEvidence: Boolean = false
     ): FootageResult = withContext(Dispatchers.IO) {
         val job = coroutineContext[Job]
         val cancelled = { job?.isActive == false }
@@ -76,28 +81,42 @@ object OfflineFootageImport {
             coroutineContext.ensureActive()
 
             // ---- windows + plan
+            var denoised: FloatArray? = null
+            var embedsDenoised = false
+            val diag = StringBuilder()   // why the routed path was not used; surfaced in the fallback text + logcat
+            if (denoiseFrontEnd) {
+                onProgress(FootageStage.DENOISE, 0f)
+                denoised = try { OfflineDenoiser.denoise(context, samples, cancelled) { onProgress(FootageStage.DENOISE, it) } }
+                           catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                           catch (e: Exception) { android.util.Log.w("OfflineFootage", "denoise front-end failed, using raw embeddings: " + e.message); diag.append("denoise failed: ${e.javaClass.simpleName} ${e.message}; "); null }
+                           catch (e: OutOfMemoryError) { android.util.Log.w("OfflineFootage", "denoise front-end ran out of memory, using raw embeddings"); diag.append("denoise OOM; "); null }
+                coroutineContext.ensureActive()
+                embedsDenoised = denoised != null
+                diag.append(if (embedsDenoised) "embeddings=denoised; " else "embeddings=raw; ")
+            }
             onProgress(FootageStage.EMBED, 0f)
             val embed = VoicePrint(context.assets)
             val windows = try {
-                FootageWindows.embedWindows(samples, 16000, embed = { embed.embed(it) }, isCancelled = cancelled,
+                FootageWindows.embedWindows(denoised ?: samples, 16000, embed = { embed.embed(it) }, isCancelled = cancelled,
                     // windows under 50% speech abstain: no embedding, no cluster membership, no reference candidacy
                     eligible = { a, b -> FootageWindows.speechCoverage(speech, a, b) >= FinalAudioGuardMath.MIN_SPEECH },
                     onProgress = { d, t -> onProgress(FootageStage.EMBED, d.toFloat() / t) })
-            } finally { embed.release() }
+            } finally { embed.release(); denoised = null }   // free the denoised copy; nothing downstream uses it
             coroutineContext.ensureActive()
             val tap = if (tapStart != null && tapEnd != null) FootageAnalysis.Interval(tapStart.toFloat(), tapEnd.toFloat()) else null
             val plan = if (windows == null || windows.isEmpty()) PlanResult.Abstain(AbstainReason.NO_CLUSTER)
-                       else OfflineFootagePlanner.plan(windows, duration, tap = tap)
+                       else OfflineFootagePlanner.plan(windows, duration, tap = tap,
+                            profile = if (embedsDenoised) OfflineFootagePlanner.MergeProfile.DENOISED else OfflineFootagePlanner.MergeProfile.RAW)
 
             if (plan is PlanResult.Abstain) {
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, plan.reason, dir)
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, plan.reason, dir, diag.toString() + "stage=plan")
             }
             plan as PlanResult.Plan
 
             // ---- reference guard (existing) on the planner's reference
             val reference = concat(samples, plan.reference)
             if (!OfflineQualityGuard.reference(context, reference))
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir)
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + "stage=reference-guard")
 
             // ---- extraction (existing, blocking <= 180 s, no cancel param)
             onProgress(FootageStage.EXTRACT, 0f)
@@ -109,12 +128,17 @@ object OfflineFootageImport {
 
             // ---- routed render + output gates (pure), THEN the selected-bin speaker guard on the FINAL rendered audio
             onProgress(FootageStage.RENDER, 0f)
-            val labels = plan.labels.toTypedArray()
+            val labels = when (val ev = TargetEvidence.relabel(plan.labels.toTypedArray(), samples, extracted, speech, 16000, targetEvidence)) {
+                is TargetEvidence.Result.Unchanged -> ev.labels
+                is TargetEvidence.Result.Relabeled -> ev.labels
+                is TargetEvidence.Result.Contradicted ->
+                    return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.EVIDENCE_CONTRADICTS_PLAN, dir, diag.toString() + "stage=evidence")
+            }
             val outcome = FootageRenderPipeline.run(samples, extracted, null, labels, speech)
             if (outcome !is RenderOutcome.Rendered)
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir)
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + "stage=render-gates")
             if (!OfflineFootageGuard.output(context, samples, outcome.audio, reference, speech, labels))
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir)
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + "stage=output-guard")
             WavWriter(clean, 16000).use { it.write(outcome.audio) }
             coroutineContext.ensureActive()
 
@@ -149,11 +173,13 @@ object OfflineFootageImport {
 
     /** Abstain/gate-failure policy: tap given -> unchanged exp-10 path (own guards + "Original kept" fallback); no tap -> ask for a tap. */
     private suspend fun fallbackOrAsk(
-        context: Context, uri: Uri, tapStart: Double?, tapEnd: Double?, reason: AbstainReason, dir: File
+        context: Context, uri: Uri, tapStart: Double?, tapEnd: Double?, reason: AbstainReason, dir: File, diag: String = ""
     ): FootageResult {
         dir.deleteRecursively()                        // drop this attempt's folder; exp-10 creates its own
         if (tapStart == null || tapEnd == null) return FootageResult.NeedsTap(reason)
+        android.util.Log.w("OfflineFootage", "routed path not used: $reason ($diag)")
         val meta = OfflineVideoImport.run(context, uri, tapStart, tapEnd)
+        try { File(meta.dir, "offline-fallback.txt").let { if (it.exists()) it.appendText(" [routed path not used: $reason; $diag]") } } catch (e: Exception) {}
         return FootageResult.Done(meta, false, "Routed path not used ($reason); exp-10 guarded path ran")
     }
 
@@ -183,19 +209,23 @@ object OfflineFootageGuard {
         val embed = VoicePrint(context.assets)
         try {
             val r = embed.embed(ref) ?: return false
-            val srcScores = ArrayList<Float>(); val outScores = ArrayList<Float>()
+            val srcScores = ArrayList<Float>(); val outScores = ArrayList<Float>(); val targetScores = ArrayList<Float>()
             for (a in source.indices step 48000) {
                 val b = minOf(a + 48000, source.size)
                 if (b - a < 16000) continue
                 if (!FinalAudioGuardMath.chunkQualifies(labels, speech, a, b)) continue
                 val s = embed.embed(source.copyOfRange(a, b)) ?: return false
                 val y = embed.embed(finalAudio.copyOfRange(a, b)) ?: return false
-                srcScores.add(VoiceMatch.cosine(s, r)); outScores.add(VoiceMatch.cosine(y, r))
+                val yc = VoiceMatch.cosine(y, r)
+                srcScores.add(VoiceMatch.cosine(s, r)); outScores.add(yc)
+                if (FinalAudioGuardMath.targetChunkQualifies(labels, speech, a, b)) targetScores.add(yc)
             }
             if (outScores.isEmpty()) return false
             android.util.Log.i("OfflineFootageGuard", "sourceCosine=${srcScores.average()} outputCosine=${outScores.average()} chunks=${outScores.size} chunkScores=$outScores")
             // Routed renders get NO per-chunk floor: legitimately ducked other-speaker chunks score ~0 vs the target reference. Bad plans are caught by PLAN_UNSTABLE.
-            return FinalAudioGuardMath.pass(srcScores.average().toFloat(), outScores.average().toFloat(), outScores.size)
+            // Target-region floor (see FinalAudioGuardMath): a wrongly ducked target fragment must not hide inside the mean.
+            return FinalAudioGuardMath.pass(srcScores.average().toFloat(), outScores.average().toFloat(), outScores.size) &&
+                !FinalAudioGuardMath.tooManyWeakTargetChunks(targetScores.toFloatArray())
         } finally { embed.release() }
     }
 }
