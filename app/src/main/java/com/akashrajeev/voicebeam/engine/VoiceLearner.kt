@@ -13,13 +13,16 @@ class VoiceLearner(
     private val needed: Int = 3,
     private val clockMs: () -> Long = { System.nanoTime() / 1_000_000 },
     private val profile: com.akashrajeev.voicebeam.core.SpeakerProfile = com.akashrajeev.voicebeam.core.SpeakerProfile.DEFAULT,
+    private val querySeconds: Float = chunkSeconds,
+    private val queryHopSeconds: Float = 1f,
 ) {
     private val chunk = (sampleRate * chunkSeconds).toInt()
     private val enrollBuf = FloatArray(chunk)
     private var enrollFill = 0
-    private val scoreBuf = FloatArray(chunk)
+    private val queryChunk = (sampleRate * querySeconds).toInt().coerceAtLeast(1)
+    private val scoreBuf = FloatArray(queryChunk)
     private var scoreFill = 0
-    private val queryHop = sampleRate.coerceAtLeast(1).coerceAtMost(chunk)
+    private val queryHop = (sampleRate * queryHopSeconds).toInt().coerceIn(1,queryChunk)
     private var querySinceScore = 0
     private var queryHasScore = false
     var queryInputSamples = 0L
@@ -92,21 +95,21 @@ class VoiceLearner(
             return null
         }
         if (!learned) return null
-        // Full 3-second context, refreshed per voiced second. Never extend score freshness
+        // Configurable query context/hop, independent of 3-second enrollment. Never extend score freshness
         // without computing a new embedding, and never modify the enrollment centroid.
         var latest: Float? = null
         var offset = 0
         while (offset < samples.size) {
-            val untilDecode = if (queryHasScore) queryHop - querySinceScore else chunk - scoreFill
+            val untilDecode = if (queryHasScore) queryHop - querySinceScore else queryChunk - scoreFill
             val n = minOf(samples.size - offset, untilDecode)
-            if (scoreFill + n > chunk) {
-                val discard = scoreFill + n - chunk
+            if (scoreFill + n > queryChunk) {
+                val discard = scoreFill + n - queryChunk
                 System.arraycopy(scoreBuf, discard, scoreBuf, 0, scoreFill - discard)
                 scoreFill -= discard
             }
             System.arraycopy(samples, offset, scoreBuf, scoreFill, n)
             scoreFill += n; offset += n; querySinceScore += n; queryInputSamples += n
-            if (scoreFill == chunk && (!queryHasScore || querySinceScore >= queryHop)) {
+            if (scoreFill == queryChunk && (!queryHasScore || querySinceScore >= queryHop)) {
                 querySinceScore = 0; queryHasScore = true
                 val e = validEmbedding(embed(scoreBuf.copyOf()))
                 val c = centroid
