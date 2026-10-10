@@ -11,7 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.akashrajeev.voicebeam.separation.OfflineVideoImport
+import com.akashrajeev.voicebeam.separation.FootageResult
+import com.akashrajeev.voicebeam.separation.OfflineFootageImport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -54,7 +55,12 @@ fun OfflineVideoPanel(allowed: Boolean, onBusy: (Boolean) -> Unit = {}, onImport
                 else {
                     busy=true; result=""
                     scope.launch {
-                        try { val imported=OfflineVideoImport.run(context,it,a,b); val fallback=java.io.File(imported.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Offline isolated MP4 ready. Compare with original; extraction is not guaranteed."; uri=null; onImported() }
+                        try {
+                            when(val r=OfflineFootageImport.run(context,it,a,b)) {
+                                is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Offline isolated MP4 ready. Compare with original; extraction is not guaranteed."; uri=null; onImported() }
+                                is FootageResult.NeedsTap -> result="Original kept unchanged. Choose a 3-10 second moment where only the target speaks (" + r.reason.name + ")."
+                            }
+                        }
                         catch(e:CancellationException) { throw e }
                         catch(e:Exception) { result=e.message ?: "Import failed; original unchanged" }
                         finally { busy=false }
