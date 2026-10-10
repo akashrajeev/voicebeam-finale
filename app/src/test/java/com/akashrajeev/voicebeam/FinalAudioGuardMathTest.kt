@@ -44,4 +44,27 @@ class FinalAudioGuardMathTest {
     @Test(expected = IllegalArgumentException::class) fun labelsMustCoverChunk() {
         FinalAudioGuardMath.selectedFraction(six(Seg.NONE), 0, 48000)
     }
+
+    private fun fa(vararg x: Float) = x
+    @Test fun fragmentedRenderRejectsDespiteMeanPass() {
+        val o = fa(0.56f, 0.29f, 0.95f, 0.41f, 0.20f, 0.22f)   // mean 0.438 passes the mean rule, but 2/6 chunks < .25
+        assertTrue(FinalAudioGuardMath.pass(0.5f, o.average().toFloat(), o.size))
+        assertFalse(FinalAudioGuardMath.passChunks(fa(0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f), o))
+    }
+    @Test fun honestSetsPassChunkFloor() {
+        assertTrue(FinalAudioGuardMath.passChunks(fa(0.6f, 0.6f, 0.6f), fa(0.55f, 0.60f, 0.52f)))        // clip3-like
+        assertTrue(FinalAudioGuardMath.passChunks(fa(0.4f, 0.4f, 0.4f, 0.4f), fa(0.40f, 0.36f, 0.45f, 0.38f))) // clip6-like
+        assertTrue(FinalAudioGuardMath.passChunks(fa(0.707f, 0.707f), fa(0.471f, 0.50f)))                     // dashcam-like
+    }
+    @Test fun exactlyQuarterBelowIsAllowedMoreIsNot() {
+        assertFalse(FinalAudioGuardMath.tooManyWeakChunks(fa(0.2f, 0.5f, 0.6f, 0.7f)))                    // 1/4 -> allowed
+        assertTrue(FinalAudioGuardMath.tooManyWeakChunks(fa(0.2f, 0.2f, 0.6f, 0.7f, 0.7f)))               // 2/5 -> reject
+        assertTrue(FinalAudioGuardMath.tooManyWeakChunks(fa(0.2f, 0.2f, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f)).not()) // 2/8 = 25% -> allowed
+        assertTrue(FinalAudioGuardMath.tooManyWeakChunks(fa()))
+        assertFalse(FinalAudioGuardMath.tooManyWeakChunks(fa(0.25f, 0.25f)))                              // exactly at floor is not below
+    }
+    @Test fun mismatchedOrEmptyChunkArraysFail() {
+        assertFalse(FinalAudioGuardMath.passChunks(fa(0.5f), fa(0.5f, 0.5f)))
+        assertFalse(FinalAudioGuardMath.passChunks(fa(), fa()))
+    }
 }
