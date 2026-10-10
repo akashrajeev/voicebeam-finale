@@ -155,6 +155,8 @@ object OfflineFootageImport {
                 appendLine("Target source: ${plan.source}; clusters: ${plan.clusterCount}; reference seconds: ${plan.reference.sumOf { (it.endSec - it.startSec).toDouble() }}")
                 appendLine("Gates: passed. Mixture-RMS retention (TARGET_ONLY+OVERLAP bins, NOT verified target-stem retention): ${g.retentionDb} dB")
                 appendLine("None-bin ratio: ${g.noneRatio}; worst band excess (0-4 kHz, 3 bands): ${g.worstBandExcessDb} dB")
+                appendLine("Embeddings: ${if (embedsDenoised) "denoised (pin 0.41)" else "raw (pin 0.45)"}")
+                appendLine("Final 0.5 s bin labels (T=target only, O=other only, V=overlap, N=none): " + labels.joinToString("") { when (it) { FootageAnalysis.Seg.TARGET_ONLY -> "T"; FootageAnalysis.Seg.OTHER_ONLY -> "O"; FootageAnalysis.Seg.OVERLAP -> "V"; FootageAnalysis.Seg.NONE -> "N" } })
                 appendLine("Heuristic checks, not a quality certification. Isolation quality is not guaranteed.")
                 appendLine("sha256 original.mp4: ${sha256(original)}")
                 appendLine("sha256 video.mp4: ${sha256(File(dir, "video.mp4"))}")
