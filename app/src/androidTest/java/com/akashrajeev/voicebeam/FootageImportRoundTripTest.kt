@@ -54,6 +54,56 @@ class FootageImportRoundTripTest {
             }
         } finally { if(started)muxer.stop();muxer.release();codec.stop();codec.release() }
     }
+    /** A real AAC MP4 with its audio track 300ms late, previously rejected at 50ms. */
+    @Test fun lateAudioAlignsAndExportsOnVideoTimeline()=runBlocking {
+        val audio=fixture("1089-134686-0013.wav").copyOf(16000*6)
+        val folder=File(context.cacheDir,"offset-roundtrip").apply{mkdirs()}
+        var session:com.akashrajeev.voicebeam.record.SessionMeta?=null
+        try {
+            val silent=File(folder,"silent.mp4");val wav=File(folder,"audio.wav")
+            val base=File(folder,"base.mp4");val shifted=File(folder,"shifted.mp4")
+            blackVideo(silent,60);WavWriter(wav,16000).use{it.write(audio)}
+            MediaExporter.muxVideoWithWav(silent,wav,base)
+            val ex=MediaExtractor();val mux=MediaMuxer(shifted.absolutePath,MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            try {
+                ex.setDataSource(base.absolutePath)
+                val tracks=(0 until ex.trackCount).map{mux.addTrack(ex.getTrackFormat(it))};mux.start()
+                val buffer=java.nio.ByteBuffer.allocate(1024*1024);val info=MediaCodec.BufferInfo()
+                for (i in tracks.indices) {
+                    ex.selectTrack(i)
+                    val late=ex.getTrackFormat(i).getString(MediaFormat.KEY_MIME)!!.startsWith("audio/")
+                    while(true) {
+                        buffer.clear();val n=ex.readSampleData(buffer,0);if(n<0)break
+                        info.set(0,n,ex.sampleTime+(if(late)300000L else 0L),ex.sampleFlags)
+                        mux.writeSampleData(tracks[i],buffer,info);ex.advance()
+                    }
+                    ex.unselectTrack(i)
+                }
+                mux.stop()
+            } finally {mux.release();ex.release()}
+            val decoded=com.akashrajeev.voicebeam.separation.VideoAudioDecoder.decode(shifted)
+            assertEquals(96000,decoded.size)
+            assertTrue("Late audio must begin with silence",decoded.take(1600).all{kotlin.math.abs(it)<.001f})
+            // Same codec payload shifted in presentation time: decoded speech must shift by exactly .3 seconds.
+            val baseline=com.akashrajeev.voicebeam.separation.VideoAudioDecoder.decode(base)
+            var err=0.0;var energy=0.0
+            for(i in 1600 until 64000) {val d=decoded[i+4800]-baseline[i];err+=d*d;energy+=baseline[i]*baseline[i]}
+            assertTrue("Video timeline speech mismatch",err/(energy+1e-9)<.0001)
+            val hash=java.security.MessageDigest.getInstance("SHA-256").digest(shifted.readBytes())
+            val result=com.akashrajeev.voicebeam.separation.OfflineFootageImport.run(context,Uri.fromFile(shifted),.3,3.3)
+            assertTrue(result is com.akashrajeev.voicebeam.separation.FootageResult.Done)
+            result as com.akashrajeev.voicebeam.separation.FootageResult.Done;session=result.meta
+            assertArrayEquals(hash,java.security.MessageDigest.getInstance("SHA-256").digest(File(session.dir,"original.mp4").readBytes()))
+            assertTrue(session.video.length()>0)
+            val output=MediaExtractor()
+            try {
+                output.setDataSource(session.video.absolutePath)
+                val ts=(0 until output.trackCount).map{output.getTrackFormat(it).getLong(MediaFormat.KEY_DURATION)}
+                assertEquals(2,ts.size);assertTrue(kotlin.math.abs(ts[0]-ts[1])<=100000)
+            } finally {output.release()}
+            android.util.Log.i("FootageNative","offset300ms aligned; exported; routed="+result.routed+" note="+result.note)
+        } finally {session?.dir?.deleteRecursively();folder.deleteRecursively()}
+    }
     @Test fun cancelBeforeExtractionDoesNotWriteOutput() {
         val out=File(context.cacheDir,"cancel-no-output.wav");out.delete()
         try {
