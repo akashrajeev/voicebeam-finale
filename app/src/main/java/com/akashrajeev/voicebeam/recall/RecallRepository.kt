@@ -281,6 +281,17 @@ class RecallRepository(private val context: Context) {
         } catch(t: Exception) { synchronized(this@RecallRepository) { _state.value=_state.value.copy(askMessage=t.message?:"Try your question again") } }
         finally { synchronized(this@RecallRepository) { _state.value=_state.value.copy(asking=false) } }
     }
+    suspend fun instructionAudio(file: File,extract: Boolean=true): Pair<String,String> = inference.withLock {
+        check(!_state.value.recording) { "Pause Recall first" }
+        models.initialize()
+        val samples=com.akashrajeev.voicebeam.core.WavWriter.read(file).first
+        val speech=RecallSpeechGate(context).use { it.speechOnly(samples) }?:return@withLock "" to "[]"
+        val filtered=File(context.cacheDir,"reminder-speech.wav")
+        val text=try { com.akashrajeev.voicebeam.core.WavWriter(filtered,16000).use { it.write(speech) };models.transcribe(filtered.path) } finally { filtered.delete() }
+        check(!RecallPromptGuard.contaminated(text) && !RecallTranscriptQuality.repeatedLoop(text)) { "Please replay and record the instruction again" }
+        if(text.isBlank() || text=="NO_SPEECH") "" to "[]" else text to if(extract) models.reminderJson(text) else "[]"
+    }
+    suspend fun instructionText(text: String): String = inference.withLock { models.initialize();models.reminderJson(text) }
     fun rename(session: Long, title: String) = scope.launch { store.rename(session,title);refresh() }
     fun nameSpeaker(id: Long, speaker: String) = scope.launch {
         val name=speaker.trim().take(80)

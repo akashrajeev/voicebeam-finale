@@ -15,6 +15,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
     <application
         android:name=".VoiceBeamApp"
         android:allowBackup="false"
@@ -26,6 +33,19 @@
         android:theme="@style/Theme.VoiceBeam">
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <service android:name=".reminders.ReminderCaptureService" android:exported="false" android:foregroundServiceType="microphone" />
+        <service android:name=".reminders.ReminderAlertService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-confirmed reminder alarm cues pending acknowledgement" />
+        </service>
+        <activity android:name=".reminders.ReminderAlertActivity" android:exported="false" android:theme="@style/Theme.VoiceBeam" />
+        <receiver android:name=".reminders.ReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <service android:name=".recall.RecallRecorderService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity
             android:name=".MainActivity"

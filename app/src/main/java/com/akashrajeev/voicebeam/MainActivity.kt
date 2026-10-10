@@ -25,7 +25,7 @@ import com.akashrajeev.voicebeam.ui.SettingsScreen
 import com.akashrajeev.voicebeam.ui.SetupScreen
 import com.akashrajeev.voicebeam.ui.VoiceBeamTheme
 
-enum class Screen { SETUP, FOCUS, CAPTIONS, SESSIONS, SETTINGS, RECALL }
+enum class Screen { SETUP, FOCUS, CAPTIONS, SESSIONS, SETTINGS, RECALL, REMINDERS }
 
 class MainActivity : ComponentActivity() {
     private val engine: VoiceBeamEngine get() = (application as VoiceBeamApp).engine
@@ -88,6 +88,7 @@ fun App(engine: VoiceBeamEngine, permsGranted: Boolean, requestPerms: () -> Unit
             if (screen == Screen.CAPTIONS) CaptionScreen(engine) { screen = Screen.FOCUS }
         }
         Screen.SESSIONS -> SessionsScreen(engine, onNavigate = { screen = it })
+        Screen.REMINDERS -> com.akashrajeev.voicebeam.reminders.ReminderScreen(onNavigate = { screen = it })
         Screen.RECALL -> com.akashrajeev.voicebeam.recall.RecallScreen(onNavigate = { screen = it })
         Screen.SETTINGS -> SettingsScreen(engine, onNavigate = { screen = it })
     }
