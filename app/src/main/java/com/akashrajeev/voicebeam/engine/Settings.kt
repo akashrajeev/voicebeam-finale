@@ -8,7 +8,7 @@ data class Settings(
     val strictResidual: Float = .2f,
     val strictHangoverMs: Float = 700f,
     val targetMatchThreshold: Float = .8f,
-    val matcherDenoised: Boolean = false,
+    val matcherDenoised: Boolean = true,
     val quietOthers: Float = 0.86f,      // 0..1, how much to turn down everyone else
     val boostDb: Float = 6f,           // extra loudness in the earphones
     val denoise: Float = .7f,            // 0..1 noise removal strength
@@ -33,7 +33,7 @@ class SettingsStore(context: Context) {
         strictResidual = p.getFloat("strictResidual", .2f),
         strictHangoverMs = p.getFloat("strictHangoverMs", 700f),
         targetMatchThreshold = p.getFloat("targetMatchThreshold", .8f),
-        matcherDenoised = p.getBoolean("matcherDenoised", false),
+        matcherDenoised = p.getBoolean("matcherDenoised", true),
         quietOthers = p.getFloat("quiet", 0.86f),
         boostDb = p.getFloat("boost", 6f),
         denoise = p.getFloat("denoise", .7f),
