@@ -17,7 +17,7 @@ object FootageRenderPipeline {
     ): RenderOutcome {
         val routed = RoutedRender.render(source, denoised, extracted, labels, sampleRate, focusDb)
         val hardMute = RoutedRender.noneFrames(labels, source.size, sampleRate)
-        val finalAudio = RoutedRender.protect(routed, source, voiced, floor = 0.1f, hardMute = hardMute)
+        val finalAudio = RoutedRender.protect(routed, source, voiced, floor = 0.04f, hardMute = hardMute)
         // Sample-exact NONE silence: protect() frames straddle bin edges, so enforce the label boundary after it.
         val masked = RoutedRender.applyNoneMask(finalAudio, labels, sampleRate)
         val gates = OutputGates.check(masked, source, labels, sampleRate)
