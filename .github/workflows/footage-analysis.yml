@@ -2,7 +2,7 @@ name: Footage analysis internal gates
 on:
   push:
     branches: [experiment-12]
-    paths: ['.github/workflows/footage-analysis.yml', 'app/src/main/java/com/akashrajeev/voicebeam/core/FootageAnalysis.kt', 'app/src/test/java/com/akashrajeev/voicebeam/FootageAnalysisTest.kt']
+    paths: ['.github/workflows/footage-analysis.yml', 'app/src/main/java/com/akashrajeev/voicebeam/core/Footage*.kt', 'app/src/test/java/com/akashrajeev/voicebeam/Footage*Test.kt']
   workflow_dispatch:
 permissions:
   contents: read
