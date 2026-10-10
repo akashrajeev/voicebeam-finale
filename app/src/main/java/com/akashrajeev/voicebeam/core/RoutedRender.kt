@@ -77,12 +77,13 @@ object RoutedRender {
      */
     fun protect(
         extracted: FloatArray, source: FloatArray, voiced: BooleanArray,
-        frame: Int = 512, floor: Float = 0.1f, ctxFrames: Int = 3
+        frame: Int = 512, floor: Float = 0.1f, ctxFrames: Int = 3, hardMute: BooleanArray? = null
     ): FloatArray {
         require(extracted.size == source.size) { "length mismatch" }
         require(frame > 0 && ctxFrames >= 0 && floor.isFinite() && floor in 0f..1f) { "bad protect parameters" }
         val frames = (source.size + frame - 1) / frame
         require(voiced.size >= frames) { "voiced flags do not cover the audio" }
+        require(hardMute == null || hardMute.size >= frames) { "hardMute flags do not cover the audio" }
         requireSignal(extracted, "extracted"); requireSignal(source, "source")
         val out = FloatArray(extracted.size)
         var prev = 1f
@@ -94,7 +95,8 @@ object RoutedRender {
             val lo = max(0, f - ctxFrames); val hi = min(frames - 1, f + ctxFrames)
             var v = false
             for (j in lo..hi) if (voiced[j]) { v = true; break }
-            val target = if (v) cap else cap * floor
+            // hardMute (NONE-labelled bins) takes precedence over VAD context; other non-voiced frames get the soft floor
+            val target = if (hardMute != null && hardMute[f]) 0f else if (v) cap else cap * floor
             for (i in a until b) {
                 val t = if (b - a > 1) (i - a).toFloat() / (b - a - 1) else 1f
                 // ramp may only lower toward the cap, never exceed it
@@ -104,6 +106,42 @@ object RoutedRender {
             prev = target
         }
         return out
+    }
+
+    /**
+     * Sample-exact NONE mask: gain 0 inside every NONE bin; linear fades of fadeSec sit in the NEIGHBOURING non-NONE bins
+     * (ending exactly at the NONE boundary, or starting exactly where it ends) so nothing leaks into a NONE bin.
+     */
+    fun applyNoneMask(audio: FloatArray, labels: Array<FootageAnalysis.Seg>, sampleRate: Int, fadeSec: Float = 0.01f): FloatArray {
+        val binLen = (FootageAnalysis.BIN_SEC * sampleRate).toInt()
+        require(binLen > 0 && labels.isNotEmpty() && labels.size * binLen >= audio.size) { "labels do not cover the audio" }
+        require(fadeSec.isFinite() && fadeSec >= 0f && fadeSec <= 0.25f) { "bad fade" }
+        val n = audio.size; val fade = max(1, (fadeSec * sampleRate).toInt())
+        val g = FloatArray(n) { 1f }
+        fun none(i: Int) = labels[min(labels.size - 1, i / binLen)] == FootageAnalysis.Seg.NONE
+        for (i in 0 until n) if (none(i)) g[i] = 0f
+        for (i in 0 until n) {
+            if (none(i)) continue
+            // distance (in samples) to the nearest NONE sample within the fade length
+            var best = Int.MAX_VALUE
+            for (d in 1..fade) {
+                if (i + d < n && none(i + d)) { best = d; break }
+                if (i - d >= 0 && none(i - d)) { best = d; break }
+            }
+            if (best != Int.MAX_VALUE) g[i] = min(g[i], (best - 1).toFloat() / fade)
+        }
+        return FloatArray(n) { audio[it] * g[it] }
+    }
+
+    /** One flag per [frame] samples: true when the frame centre lies in a NONE-labelled bin. */
+    fun noneFrames(labels: Array<FootageAnalysis.Seg>, nSamples: Int, sampleRate: Int, frame: Int = 512): BooleanArray {
+        val binLen = (FootageAnalysis.BIN_SEC * sampleRate).toInt()
+        require(binLen > 0 && labels.isNotEmpty() && labels.size * binLen >= nSamples) { "labels do not cover the audio" }
+        val frames = (nSamples + frame - 1) / frame
+        return BooleanArray(frames) { f ->
+            val centre = min(nSamples - 1, f * frame + frame / 2)
+            labels[min(labels.size - 1, centre / binLen)] == FootageAnalysis.Seg.NONE
+        }
     }
 
     fun rms(x: FloatArray, from: Int = 0, to: Int = x.size): Float {
