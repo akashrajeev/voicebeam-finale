@@ -57,7 +57,7 @@ class OfflineVideoRoundTripTest {
     @Test fun importPreservesOriginalAndExportsSynchronizedVideo()=runBlocking {
         val a=fixture("1089-134686-0013.wav");val b=fixture("1221-135767-0005.wav")
         val n=minOf(a.size,b.size,16000*6);val frames=n/1600;val count=frames*1600
-        val mix=FloatArray(count) { if(it<32000)a[it]*.5f else (a[it]+b[it])*.5f }
+        val mix=FloatArray(count) { if(it<48000)a[it]*.5f else (a[it]+b[it])*.5f }
         val folder=File(context.cacheDir,"import-roundtrip").apply{mkdirs()}
         val silent=File(folder,"silent.mp4");val wav=File(folder,"mix.wav");val input=File(folder,"input.mp4")
         var session:com.akashrajeev.voicebeam.record.SessionMeta?=null
@@ -65,7 +65,7 @@ class OfflineVideoRoundTripTest {
             blackVideo(silent,frames);WavWriter(wav,16000).use{it.write(mix)}
             MediaExporter.muxVideoWithWav(silent,wav,input)
             val hash=java.security.MessageDigest.getInstance("SHA-256").digest(input.readBytes())
-            session=OfflineVideoImport.run(context,Uri.fromFile(input),0.0,2.0)
+            session=OfflineVideoImport.run(context,Uri.fromFile(input),0.0,3.0)
             assertArrayEquals(hash,java.security.MessageDigest.getInstance("SHA-256").digest(input.readBytes()))
             assertArrayEquals(hash,java.security.MessageDigest.getInstance("SHA-256").digest(File(session.dir,"original.mp4").readBytes()))
             val fallback=File(session.dir,"offline-fallback.txt")
