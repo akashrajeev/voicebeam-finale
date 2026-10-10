@@ -25,13 +25,13 @@ class OffsetContainerTest {
         val f=file(name);try{
             val pts=firstAudio(f)
             android.util.Log.i("OffsetFixture","$name firstAudioUs=$pts")
-            if(early)assertTrue("Early edit-list start expected <=0, got $pts",pts<=0)
+            if(early)assertTrue("Early edit-list start expected <=0, raw $pts",pts<=0)
             val audio=VideoAudioDecoder.decode(f)
             val threshold=.04;val onset=audio.indices.firstOrNull{ i -> i+160<=audio.size && kotlin.math.sqrt((i until i+160).sumOf{audio[it].toDouble()*audio[it]}/160)>threshold } ?: error("Burst missing")
             val time=onset/16000.0
             android.util.Log.i("OffsetFixture","$name onset=$time expected=$expected samples=${audio.size}")
-            assertEquals("Burst on video timeline",expected,time,.030)
-            if(late)assertTrue("Late container offset must survive Android extraction, got $pts",kotlin.math.abs(pts-236000L)<2000L)
+            assertEquals("Burst on video timeline",expected,time,.010)
+            if(late)assertTrue("Late container offset must survive Android extraction, raw $pts",kotlin.math.abs(com.akashrajeev.voicebeam.core.Mp4TrackStarts.effective(pts,com.akashrajeev.voicebeam.core.Mp4TrackStarts.read(f).audioUs)-236000L)<2000L)
         }finally{f.delete()}
     }
     @Test fun alignedBurstAtOneSecond(){burst("fx_audio_aligned.mp4",1.0)}
