@@ -1,6 +1,6 @@
 name: Unified Recall and footage port validation
 # Targeted Listen gate tuning with Recall denoiser retained
-# Re-run trigger: face-tap picker panel wiring landed (panel17)
+# Re-run trigger: offline face plumbing landed (PTS feed, extractor, proposal)
 on:
   push:
     branches: [exp-13-recall-gemma]
