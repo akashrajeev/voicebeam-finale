@@ -65,7 +65,7 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SliderRow("Noise removal", when { s.denoise < 0.05f -> "Off"; s.denoise < 0.6f -> "Light"; else -> "Strong" }, s.denoise, 0f..1f) { v -> engine.updateSettings { it.copy(denoise = v) } }
             SliderRow("Quiet others (default)", "${(s.quietOthers * 100).roundToInt()}%", s.quietOthers, 0f..1f) { v -> engine.updateSettings { it.copy(quietOthers = v) } }
             SliderRow("Hearing boost", "+${s.boostDb.roundToInt()} dB", s.boostDb, 0f..24f) { v -> engine.updateSettings { it.copy(boostDb = v) } }
-            SwitchRow("Point mic at the scene", "Uses the camcorder mic setup, best with the back camera", s.useSceneMic) { v -> engine.updateSettings { it.copy(useSceneMic = v) } }
+            SwitchRow("Point mic at the scene", "Mono fallback only; experimental Listen tries MIC stereo first", s.useSceneMic) { v -> engine.updateSettings { it.copy(useSceneMic = v) } }
             ListenTuningPanel(s,engine::updateSettings)
             SectionHeader("Captions")
             ValueRow("Language", "English")
@@ -122,6 +122,12 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             }
             if (keyMessage.isNotEmpty()) Text(keyMessage, color = Muted, fontSize = 12.sp)
             StereoProbePanel(com.akashrajeev.voicebeam.core.OfflineImportGate.allowed(recall.recording,recall.busy,recall.asking,recall.recapping,state.listening,state.recording.active,state.recording.exporting),onBusy={probeBusy=it})
+            SectionHeader("Experimental direction probe")
+            SwitchRow("Direction tiebreaker (experimental)", "Off by default. Stop Listen before changing; restart to apply. Not phone-tested.", s.spatialEnabled) { v -> engine.updateSettings { it.copy(spatialEnabled = v) } }
+            Text("Runs only while Listen is active. MIC stereo at 48 kHz; mono if unsupported. Learn the target voice first, then let only that person speak for calibration. Keep the phone still. Timing is a tiebreaker, never overlapping-voice separation. Phone rotation resets calibration when a gyroscope is available; otherwise keep it still.", color = Muted, fontSize = 12.sp)
+            SwitchRow("Solo target: stronger noise removal", "Requires direction enabled, one visible face, fresh voice match and timing agreement. Denoise Off stays Off. No extra boost beyond your hearing setting. The DFN backend already runs full wet; this changes only fallback mixing.", s.soloNoiseFocus) { v -> engine.updateSettings { it.copy(soloNoiseFocus = v) } }
+            Text(state.spatialStatus, color = Muted, fontSize = 12.sp)
+            Text("Probe: target alone, other person alone, both together, then move or re-lock. Use Share log below. Duplicate channels and uncertain timing disable the cue.", color = Muted, fontSize = 12.sp)
             SectionHeader("Live diagnostics")
             Text("Local technical logs only. No audio, captions or uploads. Share sends a text file only when you choose an app.", color = Muted, fontSize = 12.sp)
             Row {
