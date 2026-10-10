@@ -9,7 +9,8 @@ import kotlin.math.sqrt
 /** Pure-JVM render math: routed per-segment mixing and soft-floor protect(). No ORT, no Android. */
 object RoutedRender {
     const val FOCUS_MIN_DB = -30f
-    const val DEFAULT_FOCUS_DB = -18f
+    /** Product decision (user, 14:13): suppress other speakers as far as the validated range allows. Was -18. */
+    const val DEFAULT_FOCUS_DB = -30f
     const val DEFAULT_XFADE_SEC = 0.05f
 
     private fun requireSignal(x: FloatArray, name: String) {
@@ -123,29 +124,33 @@ object RoutedRender {
         return out
     }
 
+    /** NONE bins are attenuated to this fraction of the SOURCE, not digital zero (exact zeros blank the downstream speech-segmentation model). Under the 0.05 NONE-bin gate. */
+    const val NONE_GAIN = 0.04f
+
     /**
-     * Sample-exact NONE mask: gain 0 inside every NONE bin; linear fades of fadeSec sit in the NEIGHBOURING non-NONE bins
-     * (ending exactly at the NONE boundary, or starting exactly where it ends) so nothing leaks into a NONE bin.
+     * Sample-exact NONE mask: every sample inside a NONE bin becomes NONE_GAIN * source (a faint real noise floor, never digital silence).
+     * Linear fades in the NEIGHBOURING non-NONE bins bring the gain from 1 to NONE_GAIN exactly at the boundary, so nothing louder leaks into a NONE bin.
      */
-    fun applyNoneMask(audio: FloatArray, labels: Array<FootageAnalysis.Seg>, sampleRate: Int, fadeSec: Float = 0.01f): FloatArray {
+    fun applyNoneMask(audio: FloatArray, source: FloatArray, labels: Array<FootageAnalysis.Seg>, sampleRate: Int, fadeSec: Float = 0.01f, noneGain: Float = NONE_GAIN): FloatArray {
         val binLen = (FootageAnalysis.BIN_SEC * sampleRate).toInt()
+        require(source.size == audio.size) { "source length mismatch" }
         require(binLen > 0 && labels.isNotEmpty() && labels.size * binLen >= audio.size) { "labels do not cover the audio" }
         require(fadeSec.isFinite() && fadeSec >= 0f && fadeSec <= 0.25f) { "bad fade" }
+        require(noneGain.isFinite() && noneGain in 0f..1f) { "bad none gain" }
         val n = audio.size; val fade = max(1, (fadeSec * sampleRate).toInt())
-        val g = FloatArray(n) { 1f }
         fun none(i: Int) = labels[min(labels.size - 1, i / binLen)] == FootageAnalysis.Seg.NONE
-        for (i in 0 until n) if (none(i)) g[i] = 0f
+        val out = FloatArray(n)
         for (i in 0 until n) {
-            if (none(i)) continue
-            // distance (in samples) to the nearest NONE sample within the fade length
+            if (none(i)) { out[i] = source[i] * noneGain; continue }
             var best = Int.MAX_VALUE
             for (d in 1..fade) {
                 if (i + d < n && none(i + d)) { best = d; break }
                 if (i - d >= 0 && none(i - d)) { best = d; break }
             }
-            if (best != Int.MAX_VALUE) g[i] = min(g[i], (best - 1).toFloat() / fade)
+            val g = if (best == Int.MAX_VALUE) 1f else min(1f, noneGain + (1f - noneGain) * (best - 1).toFloat() / fade)
+            out[i] = audio[i] * g
         }
-        return FloatArray(n) { audio[it] * g[it] }
+        return out
     }
 
     /** One flag per [frame] samples: true when the frame centre lies in a NONE-labelled bin. */
