@@ -12,7 +12,9 @@ import java.security.MessageDigest
 /** Real, noncausal target extraction AFTER recording. Never used for live listening. */
 object OfflineSpeakerBeam {
     private const val HASH="e9bdb6c0a8e51b8341435f49abe59ead136cd2b9d6b6c178990fdc50bf54c9eb"
-    @Synchronized fun extract(context: Context, raw: File, reference: FloatArray, out: File): Long {
+    /** [isCancelled] is polled before model load, before each 6 s block and after the loop; default false keeps old callers unchanged. A block in flight (~seconds) is not interrupted. */
+    @Synchronized fun extract(context: Context, raw: File, reference: FloatArray, out: File, isCancelled: () -> Boolean = { false }): Long {
+        if(isCancelled()) throw kotlinx.coroutines.CancellationException("Offline extraction cancelled")
         require(raw.length() <= 16000L*2*120+44) { "Offline extraction supports up to 2 minutes" }
         require(reference.size >= 16000 && ExtractionRate.valid(reference)) { "Learn target voice again first" }
         val (samples,sr)=WavWriter.read(raw)
@@ -30,6 +32,7 @@ object OfflineSpeakerBeam {
                 // 6s central blocks with .5s context on each side. Offline, not causal.
                 var offset=0
                 while(offset<mono.size) {
+                    if(isCancelled()) throw kotlinx.coroutines.CancellationException("Offline extraction cancelled")
                     require(SystemClock.elapsedRealtime()-start<180000) { "Offline extraction timed out" }
                     val end=minOf(offset+48000,mono.size)
                     val left=maxOf(0,offset-4000);val right=minOf(mono.size,end+4000)
@@ -48,6 +51,7 @@ object OfflineSpeakerBeam {
                 }
             }
         } }
+        if(isCancelled()) throw kotlinx.coroutines.CancellationException("Offline extraction cancelled")
         require(ExtractionRate.valid(output)) { "Extractor returned silence" }
         require(SystemClock.elapsedRealtime()-start<180000) { "Offline extraction timed out" }
         val full=ExtractionRate.up(output,samples.size)
