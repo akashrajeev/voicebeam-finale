@@ -40,6 +40,8 @@ class AudioPipeline(
     data class FrameInfo(val level: Float, val gain: Float, val probability: Float, val voiceActive: Boolean, val monitorRoute: String?)
     data class CaptionBlock(val samples: FloatArray, val captureMs: Long, val probability: Float, val voiceActive: Boolean)
     private var capturedSamples = 0L
+    private var freshVoiceVadMisses = 0L
+    private var lastVoiceVadSequence = 0L
     val droppedCaptionBlocks: Long get() = asrQueue.dropped
 
     var enrollmentActive: () -> Boolean = { false }
@@ -236,6 +238,10 @@ class AudioPipeline(
                 val rawRms = rmsForCaption(input)
                 val gateStart = SystemClock.elapsedRealtimeNanos()
                 val s = signals()
+                if (s.voiceScoreSequence != lastVoiceVadSequence) {
+                    lastVoiceVadSequence = s.voiceScoreSequence
+                    if (!voice && s.voiceScoreAgeMs <= 1000 && (s.voiceMatch ?: 0f) >= gateTuning.targetThreshold) freshVoiceVadMisses++
+                }
                 gate.quietOthers = quietOthers
                 gate.tuning = gateTuning.sanitized()
                 val observation = com.akashrajeev.voicebeam.core.SpeechObservation.observe(
@@ -286,7 +292,7 @@ class AudioPipeline(
                         " matcherInput=" + (if (matcherDenoised) "denoised" else "raw") + " track=ENH tseEnabled=false enrollment=" + enrollmentStatus() +
                         " quietOthers=" + quietOthers + " locked=" + s.hasLock + " visible=" + s.lockedVisible +
                         " lockedLips=" + s.lockedSpeaking + " otherLips=" + s.othersSpeaking +
-                        " voiceMatch=" + s.voiceMatch + " wearerMatch=" + s.wearerMatch + " wearerVeto=" + s.wearerVetoEnabled + " boostAllowed=" + gate.boostAllowed +
+                        " freshVoiceVadMisses=" + freshVoiceVadMisses + " voiceQuerySamples=" + s.voiceQuerySamples + " voiceScoreAgeMs=" + s.voiceScoreAgeMs + " voiceScoreSeq=" + s.voiceScoreSequence + " voiceMatch=" + s.voiceMatch + " wearerMatch=" + s.wearerMatch + " wearerVeto=" + s.wearerVetoEnabled + " boostAllowed=" + gate.boostAllowed +
                         " appliedBoost=" + boost +
                         " gate=" + gate.state + " gain=" + g + " probability=" + gate.probability +
                         " vad=" + voice + " rawVadProb=" + vad.probability + " cleanVadProb=" + cleanVadProbability + " cleanVadUs=" + cleanVadUs +
