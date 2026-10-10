@@ -120,8 +120,8 @@ class VoiceBeamEngine(private val app: Context) {
             try {
                 val m = AudioModels.load(app.assets)
                 models = m
-                learner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE, profile = m.voicePrint.profile)
-                wearerLearner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE, profile = m.voicePrint.profile)
+                learner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE, profile = m.voicePrint.profile, querySeconds = 2f, queryHopSeconds = .5f)
+                wearerLearner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE, profile = m.voicePrint.profile, querySeconds = 2f, queryHopSeconds = .5f)
                 Diagnostics.event("models_ready")
                 _state.update { it.copy(modelsReady = true) }
             } catch (t: Throwable) {
@@ -423,6 +423,7 @@ class VoiceBeamEngine(private val app: Context) {
     // ---------- settings ----------
 
     private fun tuning(s: Settings) = com.akashrajeev.voicebeam.core.GateTuning(
+        conversationCandidate = true,
         strictEnabled = s.strictFocus, strictFull = s.strictFull, residualGain = s.strictResidual,
         hangoverMs = s.strictHangoverMs, targetThreshold = s.targetMatchThreshold).sanitized()
 
