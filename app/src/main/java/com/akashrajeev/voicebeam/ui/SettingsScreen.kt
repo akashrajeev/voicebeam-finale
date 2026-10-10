@@ -61,7 +61,10 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SliderRow("Hearing boost", "+${s.boostDb.roundToInt()} dB", s.boostDb, 0f..24f) { v -> engine.updateSettings { it.copy(boostDb = v) } }
             SwitchRow("Point mic at the scene", "Uses the camcorder mic setup, best with the back camera", s.useSceneMic) { v -> engine.updateSettings { it.copy(useSceneMic = v) } }
             SectionHeader("Candidate focus tuning")
-            SwitchRow("Strict learned focus", "Turn down unconfirmed speech; may hide target on matcher misses", s.strictFocus) { v -> engine.updateSettings { it.copy(strictFocus = v) } }
+            SwitchRow("Strict learned focus", "Turn down unconfirmed audio after learning; may hide target on misses", s.strictFocus) { v -> engine.updateSettings { it.copy(strictFocus = v) } }
+            Text("Strict mode", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+            Segmented(listOf("Speech-only", "Full"), if (s.strictFull) 1 else 0) { i -> engine.updateSettings { it.copy(strictFull = i == 1) } }
+            Text("Full also ducks music and quiet audio; overlap may duck the target too.", color = Color.Gray, fontSize = 12.sp)
             SliderRow("Unconfirmed residual gain", "${(s.strictResidual * 100).roundToInt()}% amplitude", s.strictResidual, .02f..1f) { v -> engine.updateSettings { it.copy(strictResidual = v) } }
             SliderRow("Target hangover", "${s.strictHangoverMs.roundToInt()} ms", s.strictHangoverMs, 0f..2000f) { v -> engine.updateSettings { it.copy(strictHangoverMs = v) } }
             SliderRow("Voice target threshold", "${(s.targetMatchThreshold * 100).roundToInt()} score", s.targetMatchThreshold, .2f.. .99f) { v -> engine.updateSettings { it.copy(targetMatchThreshold = v) } }
