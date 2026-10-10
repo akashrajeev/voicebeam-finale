@@ -53,3 +53,14 @@ if [ ! -f "$ORT_AAR" ]; then
   python3 -m pip install patchelf==0.17.2.4
   python3 scripts/isolate_ort.py
 fi
+
+# Android extractor regression fixtures from same pinned donor.
+mkdir -p app/src/androidTest/assets/enhfixtures
+[ -f app/src/androidTest/assets/enhfixtures/1089-134686-0002.wav ] || curl -fL -o app/src/androidTest/assets/enhfixtures/1089-134686-0002.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/androidTest/assets/enhfixtures/1089-134686-0002.wav
+echo "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  app/src/androidTest/assets/enhfixtures/1089-134686-0002.wav" | sha256sum -c -
+mkdir -p app/src/androidTest/assets/enhfixtures
+[ -f app/src/androidTest/assets/enhfixtures/1221-135767-0005.wav ] || curl -fL -o app/src/androidTest/assets/enhfixtures/1221-135767-0005.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/androidTest/assets/enhfixtures/1221-135767-0005.wav
+echo "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  app/src/androidTest/assets/enhfixtures/1221-135767-0005.wav" | sha256sum -c -
+mkdir -p app/src/androidTest/assets/enhfixtures
+[ -f app/src/androidTest/assets/enhfixtures/1089-134686-0013.wav ] || curl -fL -o app/src/androidTest/assets/enhfixtures/1089-134686-0013.wav https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/androidTest/assets/enhfixtures/1089-134686-0013.wav
+echo "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  app/src/androidTest/assets/enhfixtures/1089-134686-0013.wav" | sha256sum -c -
