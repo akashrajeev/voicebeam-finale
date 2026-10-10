@@ -40,3 +40,16 @@ mkdir -p app/src/androidTest/assets
 [ -f app/src/androidTest/assets/noisy_speech.wav ] || curl -fL -o app/src/androidTest/assets/noisy_speech.wav "$REL/speech-enhancement-models/speech_with_noise.wav" || true
 
 ls -la "$ASSETS" "$ASSETS/asr"
+
+# Offline model donor pinned to an exact commit; missing or mismatched bytes fail the build.
+[ -f "$ASSETS/speakerbeam-8k.onnx" ] || curl -fL -o "$ASSETS/speakerbeam-8k.onnx" "https://raw.githubusercontent.com/akashrajeev/voicebeam-finale/cc9b86e1a0f99b8ff8c7de52d120752039665e85/app/src/main/assets/models/speakerbeam-8k.onnx"
+printf '%s\n' 'e9bdb6c0a8e51b8341435f49abe59ead136cd2b9d6b6c178990fdc50bf54c9eb  app/src/main/assets/models/speakerbeam-8k.onnx' | sha256sum -c -
+
+# Isolate Java ORT1.20 core+JNI, retain sherpa1.28.2 core unchanged.
+ORT_AAR=app/libs/onnxruntime-java-jni.aar
+if [ ! -f "$ORT_AAR" ]; then
+  curl -fL -o /tmp/ort-java-source.aar https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.20.0/onnxruntime-android-1.20.0.aar
+  echo '07a8f71ef890afed8c6087a56220e6d558a492804276ee2dd7cb7f6262242027  /tmp/ort-java-source.aar' | sha256sum -c -
+  python3 -m pip install patchelf==0.17.2.4
+  python3 scripts/isolate_ort.py
+fi
