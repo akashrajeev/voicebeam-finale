@@ -103,4 +103,23 @@ class OfflineFootagePlannerTest {
         val r = OfflineFootagePlanner.plan(ws, 12f, tap = iv(0f, 3f))
         assertAbstain(AbstainReason.PLAN_UNSTABLE, r)
     }
+    @Test fun mergeProfilesPinByEmbeddingSource() {
+        assertEquals(FootageAnalysis.DEFAULT_MERGE_COS, OfflineFootagePlanner.MergeProfile.RAW.pin, 0f)
+        assertArrayEquals(floatArrayOf(0.40f, 0.50f, 0.55f), OfflineFootagePlanner.MergeProfile.RAW.perturb, 0f)
+        assertEquals(0.41f, OfflineFootagePlanner.MergeProfile.DENOISED.pin, 0f)
+        assertArrayEquals(floatArrayOf(0.39f, 0.43f), OfflineFootagePlanner.MergeProfile.DENOISED.perturb, 0f)
+    }
+    @Test fun stablePlanStillPlansWithDenoisedProfile() {
+        val r = OfflineFootagePlanner.plan(windows(), 20f, tap = iv(1f, 6f), profile = OfflineFootagePlanner.MergeProfile.DENOISED)
+        assertTrue(r is PlanResult.Plan)
+    }
+    @Test fun defaultPlanMatchesExplicitRawProfile() {
+        val ws = windows(); val tap = iv(1f, 6f)
+        val implicit = OfflineFootagePlanner.plan(ws, 20f, tap = tap) as PlanResult.Plan
+        val explicit = OfflineFootagePlanner.plan(ws, 20f, tap = tap, profile = OfflineFootagePlanner.MergeProfile.RAW) as PlanResult.Plan
+        assertEquals(implicit.target, explicit.target); assertEquals(implicit.clusterCount, explicit.clusterCount)
+        assertEquals(implicit.source, explicit.source); assertEquals(implicit.reference, explicit.reference)
+        assertEquals(implicit.labels, explicit.labels); assertEquals(implicit.purity, explicit.purity)
+    }
+
 }
