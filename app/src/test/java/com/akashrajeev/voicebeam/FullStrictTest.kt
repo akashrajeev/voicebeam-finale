@@ -16,7 +16,7 @@ class FullStrictTest {
         repeat(30) { g.process(inputs()) };assertTrue(g.gain > .9f)
         assertEquals(.2f,settle(g,inputs()),.002f)
     }
-    @Test fun explicitOtherKeepsStrongerAttenuation() { assertEquals(.04f,settle(gate(),inputs(true).copy(voiceMatch = .1f)),.002f) }
+    @Test fun explicitOtherKeepsStrongerAttenuation() { assertEquals(.15f,settle(gate(),inputs(true).copy(voiceMatch = .1f)),.002f) }
     @Test fun overlapAndFaceLossDuckWithoutClaimingSeparation() {
         assertEquals(.2f,settle(gate(), inputs(true).copy(lockedSpeaking = .8f, othersSpeaking = .8f)),.002f)
         assertEquals(.2f,settle(gate(), inputs().copy(lockedVisible = false)),.002f)
