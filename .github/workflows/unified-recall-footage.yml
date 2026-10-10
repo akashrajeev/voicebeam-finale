@@ -1,6 +1,6 @@
 name: Unified Recall and footage port validation
 # Targeted Listen gate tuning with Recall denoiser retained
-# Re-run trigger: face-tap preview panel landed (tap18)
+# Re-run trigger: phone APK SHA256 print + installer artifact (tap18 build)
 on:
   push:
     branches: [exp-13-recall-gemma]
@@ -44,6 +44,8 @@ jobs:
         run: |
           unzip -p app/build/outputs/apk/debug/app-debug.apk assets/models/dpdfnet2.onnx > /tmp/packaged-dpdfnet2.onnx
           echo 'ce35d6025fc71df0ef10d1540e1b7916837bbfe5f6896deb744508d2cad487a9  /tmp/packaged-dpdfnet2.onnx' | sha256sum -c -
+      - name: Print phone APK SHA256
+        run: sha256sum app/build/outputs/apk/debug/app-debug.apk
       - name: Enable emulator KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
