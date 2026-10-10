@@ -30,7 +30,25 @@ class RecallRepository(private val context: Context) {
     private val recapCache=mutableMapOf<Long,RecapCache>()
     private fun recapSources(start: Long, end: Long): List<RecallSegment> {
         val ids=store.sessions().filter { it.start>=start && it.start<end }.map { it.id }.toSet()
-        return store.segments().filter { it.session in ids && it.text.isNotBlank() }
+        return store.segments().filter { it.session in ids && RecallPromptGuard.usable(it) }
+    }
+    private fun decodeMiniRecap(clip: RecallSegment): List<RecallAnswer>? {
+        val saved=store.sourceRecap(clip)?:return null
+        return runCatching {
+            val array=org.json.JSONArray(saved)
+            (0 until array.length()).mapNotNull { index ->
+                val item=array.getJSONObject(index);val quotes=item.getJSONArray("quotes")
+                val citations=(0 until quotes.length()).map { RecallCitation(clip,quotes.getString(it)) }
+                if(citations.isEmpty() || citations.any { !RecallGrounding.isExactQuote(it.quote,clip.text) }) null
+                else RecallAnswer(item.getString("text"),citations,item.optBoolean("generated"),item.optString("reason"))
+            }
+        }.getOrNull()
+    }
+    private fun saveMiniRecap(clip: RecallSegment, answers: List<RecallAnswer>) {
+        val array=org.json.JSONArray()
+        answers.forEach { answer -> array.put(org.json.JSONObject().put("text",answer.text).put("generated",answer.generated)
+            .put("reason",answer.fallbackReason).put("quotes",org.json.JSONArray(answer.citations.map { it.quote }))) }
+        store.saveSourceRecap(clip,array.toString())
     }
     private fun recapSignature(sources: List<RecallSegment>) = sources.joinToString("|") { "${it.id}:${it.text}:${it.notes}" }
     @Synchronized fun recap(start: Long, end: Long, force: Boolean = false) {
@@ -48,46 +66,87 @@ class RecallRepository(private val context: Context) {
             _state.value=_state.value.copy(recap=emptyList(),recapMessage="Recap updates after Pause and queued speech processing",recapping=false);return
         }
         if(!RecallModelFiles.ready(context)) return
-        _state.value=_state.value.copy(recap=emptyList(),recapMessage="Updating recap across ${sources.map { it.session }.distinct().size} conversations",recapping=true)
-        if(recapWorker?.isActive==true) return
+        if(recapWorker?.isActive==true) {
+            if(force) _state.value=_state.value.copy(recapMessage="Previous recap is still finishing/cancelling. Retry after it returns.")
+            return
+        }
+        _state.value=_state.value.copy(recap=emptyList(),recapMessage="Updating mini-summaries across ${sources.size} audio sources",recapping=true)
         recapWorker=scope.launch {
+            val request=start to end
+            val input=recapSources(start,end);val version=recapSignature(input)
+            val groups=input.sortedBy { it.id }
+            val started=android.os.SystemClock.elapsedRealtime();val deadline=started+120000
+            val partial=groups.associate { it.id to decodeMiniRecap(it) }.toMutableMap()
+            // Empty model results are not successful summaries; retry them in later runs.
+            partial.keys.toList().forEach { id -> if(partial[id]?.isEmpty()==true) partial[id]=null }
+            var completed=partial.values.count { it!=null }
+            fun collected()=groups.flatMap { partial[it.id].orEmpty() }
+            var answers=collected()
+            synchronized(this@RecallRepository) { if(recapRequest==request) _state.value=_state.value.copy(recap=answers) }
+            val stage=java.util.concurrent.atomic.AtomicReference("Waiting for local processing")
+            val expired=java.util.concurrent.atomic.AtomicBoolean(false)
+            val ownsInference=java.util.concurrent.atomic.AtomicBoolean(false)
+            val watchdog=scope.launch {
+                while(isActive) {
+                    delay(1000)
+                    val elapsed=android.os.SystemClock.elapsedRealtime()-started
+                    synchronized(this@RecallRepository) {
+                        if(recapRequest==request) _state.value=_state.value.copy(
+                            recapMessage=if(elapsed>=120000) "Recap timed out after 2 minutes. Cancelling local generation; retry when it finishes." else "${stage.get()} · ${elapsed/1000}s · $completed/${groups.size} sources done",
+                            recapping=elapsed<120000)
+                    }
+                    if(elapsed>=120000) { expired.set(true);if(ownsInference.get()) models.cancelActive("recap");break }
+                }
+            }
             try {
-                while(true) {
-                    val request=synchronized(this@RecallRepository) { recapRequest }?:break
-                    val input=recapSources(request.first,request.second);val version=recapSignature(input)
-                    val answers=mutableListOf<RecallAnswer>()
-                    // Yield between conversations so queued ASR and Ask can run.
-                    for(clips in input.groupBy { it.session }.values) {
-                        if(_state.value.recording || _state.value.busy) break
+                for((index,clip) in groups.withIndex()) {
+                    if(partial[clip.id]!=null) continue
+                    if(_state.value.recording || _state.value.busy) error("Recap paused for recording/queued processing. Tap Retry recap after Pause.")
+                    stage.set("Waiting for local model · source ${index+1}/${groups.size}")
+                    val result=withTimeout(maxOf(1L,deadline-android.os.SystemClock.elapsedRealtime())) {
                         inference.withLock {
-                            models.initialize()
-                            answers+=models.answer("Summarize the topics, decisions and actions actually discussed in this conversation for the daily recap. Describe talk as talk, not completed work.",clips)
+                            check(!expired.get()) { "Recap timed out. Tap Retry recap." }
+                            stage.set("Summarizing source ${index+1}/${groups.size}")
+                            ownsInference.set(true)
+                            models.operation="recap"
+                            try {
+                                models.initialize()
+                                models.miniSummary(clip,deadline)
+                            } finally { models.operation="other";ownsInference.set(false) }
                         }
-                        yield()
                     }
-                    val done=synchronized(this@RecallRepository) {
-                        val current=recapSignature(recapSources(request.first,request.second))
-                        if(current==version && !_state.value.recording && !_state.value.busy) {
-                            val message="${input.map { it.session }.distinct().size} conversations · ${input.size} transcript sources reviewed" +
-                                if(answers.isEmpty()) " · No supported recap returned" else " · Replay evidence to verify"
-                            recapCache[request.first]=RecapCache(version,answers,message)
-                            if(recapRequest==request) _state.value=_state.value.copy(recap=answers,recapMessage=message,recapping=false)
-                        }
-                        (recapRequest==request && current==version) || _state.value.recording || _state.value.busy
+                    if(result.isNotEmpty()) { saveMiniRecap(clip,result);partial[clip.id]=result;completed++ }
+                    answers=collected()
+                    synchronized(this@RecallRepository) {
+                        if(recapRequest==request) _state.value=_state.value.copy(recap=answers.toList(),recapMessage="Reviewed $completed/${groups.size} sources")
                     }
-                    if(done) break
+                    yield()
+                }
+                synchronized(this@RecallRepository) {
+                    if(recapSignature(recapSources(start,end))!=version) {
+                        if(recapRequest==request) _state.value=_state.value.copy(recap=emptyList(),recapMessage="Transcripts changed while summarizing. Tap Retry recap for the latest sources.",recapping=false)
+                    } else {
+                        val message="${input.map { it.session }.distinct().size} conversations · $completed/${input.size} sources reviewed" +
+                            if(answers.isEmpty()) " · No supported recap returned. Tap Retry recap." else if(completed<groups.size) " · Some sources had no validated summary. Tap Retry recap." else " · Replay evidence to verify"
+                        if(completed==groups.size) recapCache[start]=RecapCache(version,answers.toList(),message)
+                        if(recapRequest==request) _state.value=_state.value.copy(recap=answers.toList(),recapMessage=message,recapping=false)
+                    }
                 }
             } catch(t: Exception) {
-                synchronized(this@RecallRepository) { _state.value=_state.value.copy(recap=emptyList(),recapMessage=t.message?:"Recap needs retry",recapping=false) }
-            } finally { synchronized(this@RecallRepository) { recapWorker=null;_state.value=_state.value.copy(recapping=false)
-                recapRequest?.let { request ->
-                    if(!_state.value.recording && !_state.value.busy && recapCache[request.first]?.signature!=recapSignature(recapSources(request.first,request.second)) && _state.value.recapMessage.startsWith("Updating"))
-                        recap(request.first,request.second)
+                synchronized(this@RecallRepository) {
+                    if(recapRequest==request) _state.value=_state.value.copy(recap=answers.toList(),
+                        recapMessage=(if(expired.get() || t is TimeoutCancellationException) "Recap timed out after 2 minutes" else t.message?:"Recap failed") + " · $completed/${groups.size} sources reviewed. Tap Retry recap.",recapping=false)
                 }
-            } }
+            } finally {
+                watchdog.cancel()
+                synchronized(this@RecallRepository) {
+                    recapWorker=null
+                    if(recapRequest==request) _state.value=_state.value.copy(recapping=false)
+                }
+            }
         }
     }
-    init { refresh(); process() }
+    init { store.quarantinePromptLeaks();refresh(); process() }
     @Synchronized fun refresh(message: String? = null, busy: Boolean? = null) {
         _state.value=_state.value.copy(sessions=store.sessions(),segments=store.segments(),
             modelsReady=RecallModelFiles.ready(context),message=message?:_state.value.message,busy=busy?:_state.value.busy)
@@ -149,6 +208,12 @@ class RecallRepository(private val context: Context) {
                                     com.akashrajeev.voicebeam.core.WavWriter(filtered,16000).use { it.write(speech) }
                                     models.transcribe(filtered.path)
                                 } finally { filtered.delete() }
+                                if(RecallPromptGuard.contaminated(result)) {
+                                    store.update(next.id,text=result,status="contaminated",notes="[]",processingMs=android.os.SystemClock.elapsedRealtime()-started)
+                                    store.index(next.id,emptyList())
+                                    refresh("Clip ${next.id}: instruction echo held for review; excluded from notes/search. Replay or retry.",true)
+                                    return@withLock
+                                }
                                 if(RecallTranscriptQuality.repeatedLoop(result)) {
                                     store.update(next.id,status="review",processingMs=android.os.SystemClock.elapsedRealtime()-started)
                                     refresh("Clip ${next.id}: repeated output held for review. Replay or retry the audio.",true)
@@ -207,7 +272,7 @@ class RecallRepository(private val context: Context) {
                 models.initialize()
                 require(question.toByteArray().size<=600) { "Please shorten the question and try again" }
                 val allowed=store.sessions().filter { session!=null && it.id==session || session==null && (dayStart==null || it.start>=dayStart) && (dayEnd==null || it.start<dayEnd) }.map { it.id }.toSet()
-                val sources=if(RecallConversation.summaryQuestion(question)) store.segments(session).filter { it.session in allowed && it.text.isNotBlank() }
+                val sources=if(RecallConversation.summaryQuestion(question)) store.segments(session).filter { it.session in allowed && RecallPromptGuard.usable(it) }
                     else store.search(models.embedding(question,true),session,allowed)
                 if(sources.isEmpty()) emptyList() else models.answer(question,sources)
             }

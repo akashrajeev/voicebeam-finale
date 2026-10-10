@@ -8,11 +8,12 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", null, 4) {
+class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", null, 5) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE sessions(id INTEGER PRIMARY KEY, start INTEGER NOT NULL, title TEXT NOT NULL, duration_ms INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE TABLE segments(id INTEGER PRIMARY KEY, session INTEGER NOT NULL, start INTEGER NOT NULL, duration INTEGER NOT NULL, path TEXT NOT NULL, text TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'queued', speaker TEXT NOT NULL DEFAULT '', vector BLOB, notes TEXT NOT NULL DEFAULT '[]', processing_ms INTEGER NOT NULL DEFAULT 0)")
         createEmbeddings(db)
+        createRecaps(db)
         db.execSQL("CREATE INDEX segment_session ON segments(session,start)")
         db.execSQL("CREATE INDEX segment_status ON segments(status,id)")
     }
@@ -20,6 +21,14 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
         if(old<2) db.execSQL("ALTER TABLE segments ADD COLUMN processing_ms INTEGER NOT NULL DEFAULT 0")
         if(old<3) createEmbeddings(db)
         if(old<4) db.execSQL("ALTER TABLE sessions ADD COLUMN duration_ms INTEGER NOT NULL DEFAULT 0")
+        if(old<5) createRecaps(db)
+    }
+    private fun createRecaps(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE source_recaps(segment INTEGER PRIMARY KEY, transcript TEXT NOT NULL, result TEXT NOT NULL)")
+    }
+    fun sourceRecap(clip: RecallSegment): String? = readableDatabase.rawQuery("SELECT result FROM source_recaps WHERE segment=? AND transcript=?",arrayOf(clip.id.toString(),clip.text)).use { c -> if(c.moveToFirst()) c.getString(0) else null }
+    fun saveSourceRecap(clip: RecallSegment, result: String) {
+        writableDatabase.insertWithOnConflict("source_recaps",null,ContentValues().apply { put("segment",clip.id);put("transcript",clip.text);put("result",result) },SQLiteDatabase.CONFLICT_REPLACE)
     }
     private fun createEmbeddings(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE embeddings(segment INTEGER NOT NULL, position INTEGER NOT NULL, text TEXT NOT NULL, vector BLOB NOT NULL, PRIMARY KEY(segment,position))")
@@ -36,7 +45,7 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
         } finally { db.endTransaction() }
     }
     fun search(query: FloatArray, session: Long?, allowed: Set<Long>? = null): List<RecallSegment> {
-        val segments=segments(session).filter { allowed==null || it.session in allowed }.associateBy { it.id }
+        val segments=segments(session).filter { RecallPromptGuard.usable(it) && (allowed==null || it.session in allowed) }.associateBy { it.id }
         val matches=readableDatabase.rawQuery("SELECT segment,text,vector FROM embeddings",null).use { c -> buildList {
             while(c.moveToNext()) {
                 val source=segments[c.getLong(0)]?:continue
@@ -70,7 +79,14 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
         } ?: return null
         return segments(id.second).find { it.id==id.first }
     }
-    fun retryFailed() = writableDatabase.execSQL("UPDATE segments SET status=CASE WHEN text='' THEN 'queued' ELSE 'transcribed' END WHERE status IN ('retry','needs_index','quiet','review')")
+    fun quarantinePromptLeaks() {
+        segments().filter { it.status!="contaminated" && RecallPromptGuard.contaminated(it.text) }.forEach { clip ->
+            update(clip.id,status="contaminated",notes="[]")
+            writableDatabase.delete("embeddings","segment=?",arrayOf(clip.id.toString()))
+            writableDatabase.delete("source_recaps","segment=?",arrayOf(clip.id.toString()))
+        }
+    }
+    fun retryFailed() = writableDatabase.execSQL("UPDATE segments SET status=CASE WHEN text='' OR status='contaminated' THEN 'queued' ELSE 'transcribed' END WHERE status IN ('retry','needs_index','quiet','review','contaminated')")
     fun update(id: Long, text: String? = null, status: String? = null, vector: FloatArray? = null, notes: String? = null, speaker: String? = null, processingMs: Long? = null) {
         val v = ContentValues().apply {
             processingMs?.let { put("processing_ms",it) }
@@ -85,6 +101,7 @@ class RecallStore(context: Context) : SQLiteOpenHelper(context, "recall.db", nul
         val files = segments(session).map { File(it.path) }
         writableDatabase.beginTransaction()
         try {
+            writableDatabase.execSQL("DELETE FROM source_recaps WHERE segment IN (SELECT id FROM segments WHERE session=?)",arrayOf(session))
             writableDatabase.execSQL("DELETE FROM embeddings WHERE segment IN (SELECT id FROM segments WHERE session=?)",arrayOf(session))
             writableDatabase.delete("segments","session=?",arrayOf(session.toString()))
             writableDatabase.delete("sessions","id=?",arrayOf(session.toString()))

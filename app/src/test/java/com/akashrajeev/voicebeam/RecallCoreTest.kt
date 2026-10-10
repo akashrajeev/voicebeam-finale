@@ -112,4 +112,24 @@ class RecallCoreTest {
         assertEquals(2,points.size);assertTrue(points.all { RecallGrounding.isExactQuote(it,text) })
         assertTrue(RecallConversation.keyPoints("").isEmpty())
     }
+
+    @Test fun exactPhotographedPromptLeakIsQuarantined() {
+        val leak="Yeah, we have just added the food and it's okay. And let's see if this station is recorded. And then we on the next implementation, it's request upload of a video file. And let's " + RecallPromptGuard.legacy.lowercase()
+        assertTrue(RecallPromptGuard.contaminated(leak))
+        assertFalse(RecallPromptGuard.usable(clip(12,0,leak,duration=19000)))
+        assertTrue(RecallConversation.transcript(listOf(clip(12,0,leak))).isEmpty())
+    }
+    @Test fun partialPromptEchoDetectedDespitePunctuationAndCase() {
+        assertTrue(RecallPromptGuard.contaminated("Noise MUSIC distant unintelligible crowd sounds and silence are not words"))
+        assertTrue(RecallPromptGuard.contaminated("Contextual spelling hints: VoiceBeam, Gemma"))
+        assertTrue(RecallPromptGuard.contaminated(RecallPromptGuard.transcription))
+    }
+    @Test fun normalModelNamesAndShortCommonSpeechRemainUsable() {
+        assertFalse(RecallPromptGuard.contaminated("We are talking about VoiceBeam Gemma E4B and EmbeddingGemma."))
+        assertFalse(RecallPromptGuard.contaminated("Please transcribe only clearly intelligible words."))
+        assertTrue(RecallPromptGuard.usable(clip(1,0,"We tested the app today.")))
+    }
+    @Test fun quarantineStatusExcludedEvenWhenTextLooksPlausible() {
+        assertFalse(RecallPromptGuard.usable(clip(1,0,"We tested today.").copy(status="contaminated")))
+    }
 }

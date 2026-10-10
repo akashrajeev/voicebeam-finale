@@ -7,6 +7,10 @@ import android.media.MediaPlayer
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -139,30 +143,37 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                     RecallPanel(Modifier.clickable { selected=session.id;title=session.title;page="detail" }) {
                         Text(time(session.start),color=Mint,fontSize=12.sp)
                         Text(session.title,color=Sand,fontSize=20.sp,fontWeight=FontWeight.SemiBold)
-                        Text(clips.firstOrNull { it.text.isNotBlank() }?.text?.take(150)?:"${clips.size} audio moments saved",color=Color(0xFFACC6BD))
+                        Text(clips.firstOrNull { RecallPromptGuard.usable(it) }?.text?.take(150)?:"${clips.size} audio moments saved",color=Color(0xFFACC6BD))
                         Text("${RecallConversation.clock(maxOf(session.duration,RecallConversation.duration(clips)))} recorded · ${clips.size} replay anchors ›",color=Color(0xFF8AABA0),fontSize=12.sp)
                     }
                 }
                 item {
                     Text("Stored on this phone",color=Color(0xFF8AABA0),fontSize=12.sp)
                     RecallPanel {
-                        Text("DAILY RECAP",color=Mint,fontSize=12.sp)
+                        Text("DAILY RECAP · SOURCE MINI-SUMMARIES",color=Mint,fontSize=12.sp)
                         Text(state.recapMessage,color=Color(0xFFACC6BD),fontSize=12.sp)
                         if(state.recapping) LinearProgressIndicator(Modifier.fillMaxWidth(),color=Mint)
-                        state.recap.forEach { answer ->
-                            Text(answer.text,color=Sand)
-                            Text(if(answer.generated) "Generated summary" else answer.fallbackReason.ifBlank { "Source extract fallback" },color=Mint,fontSize=11.sp)
-                            answer.citations.forEach { citation ->
-                                Text(citation.quote,color=Color(0xFFACC6BD),fontSize=12.sp)
-                                TextButton(onClick={replay(citation.source)}) { Text("▶ ${time(state.sessions.find { it.id==citation.source.session }?.start?:0L)} · source ${citation.source.id}") }
+                        state.recap.groupBy { it.citations.firstOrNull()?.source?.session }.forEach { (session,answers) ->
+                            val conversation=state.sessions.find { it.id==session }
+                            Text("${conversation?.let { time(it.start) }?:"Conversation"} · ${conversation?.title?:"Conversation"}",color=Mint,fontSize=12.sp)
+                            answers.forEach { answer ->
+                                val anchor=answer.citations.firstOrNull()?.source
+                                var evidence by rememberSaveable(anchor?.id,answer.text) { mutableStateOf(false) }
+                                Text(answer.text,color=Sand)
+                                if(!answer.generated) Text(answer.fallbackReason.ifBlank { "Checked transcript excerpt" },color=Color(0xFFACC6BD),fontSize=11.sp)
+                                Row {
+                                    if(anchor!=null) TextButton(onClick={replay(anchor)}) { Text("▶ ${RecallConversation.clock(anchor.start)}") }
+                                    TextButton(onClick={evidence=!evidence}) { Text(if(evidence) "Hide evidence" else "View evidence") }
+                                }
+                                if(evidence) answer.citations.forEach { citation -> Text(citation.quote,color=Color(0xFFACC6BD),fontSize=12.sp) }
                             }
                         }
-                        if(!state.recapping) TextButton(onClick={repo.recap(dayStart,dayEnd,true)}) { Text("Update recap") }
+                        if(!state.recapping) TextButton(onClick={repo.recap(dayStart,dayEnd,true)}) { Text("Retry recap / Update") }
                     }
-                    if(state.segments.any { it.status in listOf("retry","needs_index","review") }) TextButton(onClick={repo.retry()}) { Text("Retry processing") }
+                    if(state.segments.any { it.status in listOf("retry","needs_index","review","contaminated") }) TextButton(onClick={repo.retry()}) { Text("Retry processing") }
                     if(state.recording && state.segments.any { it.text.isNotBlank() }) {
                         RecallPanel { Text("CATCH-UP",color=Mint,fontSize=12.sp)
-                            state.segments.filter { it.text.isNotBlank() }.takeLast(3).forEach { Text(it.text,color=Sand) }
+                            state.segments.filter { RecallPromptGuard.usable(it) }.takeLast(3).forEach { Text(it.text,color=Sand) }
                         }
                     }
                 }
@@ -180,7 +191,7 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                         TextButton(onClick={deletion=true},enabled=!state.recording) { Text("Delete") }
                     }
                     TextButton(onClick={
-                        val text=RecallConversation.transcript(state.segments.filter { it.session==selected }).joinToString("\n\n") { "[${RecallConversation.clock(it.source.start)}, source ${it.source.id}] ${it.text}" }
+                        val text=RecallConversation.transcript(state.segments.filter { it.session==selected }).joinToString(" ") { "[${RecallConversation.clock(it.source.start)}] ${it.text}" }
                         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text),"Share conversation transcript"))
                     }) { Text("Share transcript") }
                 }
@@ -192,19 +203,33 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                     Text("Recorded ${RecallConversation.clock(maxOf(saved,live,RecallConversation.duration(clips)))}",color=Mint)
                     Text("One continuous recording. Replay anchors are 25-second windows, not different speakers.",color=Color(0xFFACC6BD),fontSize=12.sp)
                     Text("CONVERSATION TRANSCRIPT",color=Sand,fontWeight=FontWeight.Bold)
+                    if(clips.any { it.status=="contaminated" || RecallPromptGuard.contaminated(it.text) })
+                        Text("A contaminated audio window is held out. Replay or retry it below; the transcript has a gap.",color=Mint,fontSize=12.sp)
                     if(conversation.isEmpty()) Text("Audio saved. Transcript is still processing or held for review.",color=Sand)
                 }
                 if(conversation.isNotEmpty()) item { RecallPanel {
-                    conversation.forEach { entry ->
-                        TextButton(onClick={replay(entry.source)}) { Text("▶ ${RecallConversation.clock(entry.source.start)} · source ${entry.source.id}") }
-                        if(entry.source.speaker.isNotBlank()) Text(entry.source.speaker,color=Mint)
-                        Text(entry.text,color=Sand)
+                    val flowing=buildAnnotatedString {
+                        var lastSpeaker=""
+                        conversation.forEachIndexed { index,entry ->
+                            if(index>0) append(" ")
+                            if(entry.source.speaker.isNotBlank() && entry.source.speaker!=lastSpeaker) {
+                                append("\n${entry.source.speaker}: ");lastSpeaker=entry.source.speaker
+                            }
+                            pushStringAnnotation("replay",entry.source.id.toString())
+                            withStyle(SpanStyle(color=Mint,fontSize=11.sp)) { append("[${RecallConversation.clock(entry.source.start)}] ") }
+                            pop()
+                            append(entry.text)
+                        }
                     }
+                    ClickableText(text=flowing,style=androidx.compose.ui.text.TextStyle(color=Sand,fontSize=16.sp,lineHeight=25.sp),
+                        onClick={ offset -> flowing.getStringAnnotations("replay",offset,offset).firstOrNull()?.let { marker ->
+                            clips.find { it.id.toString()==marker.item }?.let { replay(it) }
+                        } })
                 } }
                 item {
                     Text("KEY POINTS · SOURCE EXTRACTS",color=Sand,fontWeight=FontWeight.Bold)
-                    val points=clips.flatMap { clip ->
-                        val notes=runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray())
+                    val points=clips.filter { RecallPromptGuard.usable(it) }.flatMap { clip ->
+                        val notes=if(RecallPromptGuard.usable(clip)) runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray()) else JSONArray()
                         if(notes.length()==0 && clip.text.isNotBlank()) RecallConversation.keyPoints(clip.text).map { clip to it }
                         else (0 until notes.length()).mapNotNull { i -> notes.optJSONObject(i)?.optString("quote")?.takeIf { it.isNotBlank() }?.let { clip to it } }
                     }.distinctBy { it.second }
@@ -223,12 +248,13 @@ fun RecallScreen(onNavigate: (Screen)->Unit) {
                             val position=state.segments.filter { it.status in listOf("queued","transcribed") }.indexOfFirst { it.id==clip.id }+1
                             Text("Queue position $position · audio safely saved",color=Mint,fontSize=12.sp)
                         }
+                        if(clip.status=="contaminated" || RecallPromptGuard.contaminated(clip.text)) Text("Instruction echo detected · excluded from transcript/notes/search. Raw output kept below for review.",color=Mint,fontSize=12.sp)
                         if(clip.status=="review") Text("Transcript held for review · replay or retry the original",color=Mint,fontSize=12.sp)
                         if(clip.status=="quiet") Text("No clear speech detected · original audio kept",color=Mint,fontSize=12.sp)
-                        if(clip.status in listOf("retry","needs_index","quiet","review")) TextButton(onClick={repo.retry()}) { Text("Retry this saved audio") }
+                        if(clip.status in listOf("retry","needs_index","quiet","review","contaminated")) TextButton(onClick={repo.retry()}) { Text("Retry this saved audio") }
                         TextButton(onClick={replay(clip)}) { Text("▶ Replay original moment") }
                         if(clip.processingMs>0) Text("Processing time: ${clip.processingMs/1000}s · ${clip.status}",color=Color(0xFF8AABA0),fontSize=12.sp)
-                        val notes=runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray())
+                        val notes=if(RecallPromptGuard.usable(clip)) runCatching { JSONArray(clip.notes) }.getOrDefault(JSONArray()) else JSONArray()
                         TextButton(onClick={notesOpen=!notesOpen}) { Text("${if(notesOpen) "▾" else "▸"} Extracted notes (${notes.length()})") }
                         if(!notesOpen && notes.length()>0) Text(notes.getJSONObject(0).optString("quote").take(180),color=Sand)
                         if(notesOpen) for(i in 0 until notes.length()) {
