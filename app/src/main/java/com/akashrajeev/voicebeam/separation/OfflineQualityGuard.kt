@@ -15,7 +15,10 @@ object OfflineQualityGuard {
             val half=ref.size/2
             val a=embed.embed(ref.copyOfRange(0,half))?:return false
             val b=embed.embed(ref.copyOfRange(half,ref.size))?:return false
-            return ExtractionSafety.referenceTrusted(mask.count{it}.toFloat()/mask.size,VoiceMatch.cosine(a,b))
+            val coverage=mask.count{it}.toFloat()/mask.size
+            val cosine=VoiceMatch.cosine(a,b)
+            android.util.Log.i("OfflineGuard", "reference coverage=$coverage splitCosine=$cosine")
+            return ExtractionSafety.referenceTrusted(coverage,cosine)
         } finally {embed.release()}
     }
     fun output(context: Context, source: FloatArray, extracted: FloatArray, ref: FloatArray, speech: BooleanArray): Boolean {
@@ -35,6 +38,7 @@ object OfflineQualityGuard {
             if(count==0)return false
             sourceScore/=count;outputScore/=count
             // Mixed-speaker inputs need not resemble the reference; homogeneous inputs must not lose it.
+            android.util.Log.i("OfflineGuard", "sourceCosine=$sourceScore outputCosine=$outputScore chunks=$count")
             return outputScore>=.4f && !(sourceScore>=.6f && outputScore<sourceScore-.15f)
         } finally {embed.release()}
     }
