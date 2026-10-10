@@ -22,11 +22,11 @@ object OfflineFootagePlanner {
     const val MIN_TAP_MARGIN = 0.2f
     /**
      * Plan-stability gate: a CONSISTENCY (threshold-sensitivity) check only, not proof of correct identity. A consistently wrong identity can be stable across mergeCos values; FinalAudioGuard remains the real backstop.
-     * The window roles (target / other / abstained) must agree with the roles at mergeCos 0.4, 0.45 and 0.55 for at least this
+     * The window roles (target / other / abstained) must agree with the roles at mergeCos 0.40, 0.50 and 0.55 (pin is 0.45: one value below, two above; all levels eval-swept) for at least this
      * fraction of windows. Calibration (5 embedding fixtures): good plans min 0.93/1.00/0.94, mislabelled plans 0.82/0.73. PROVISIONAL, tiny sample.
      */
     const val MIN_PLAN_STABILITY = 0.88f
-    private val PERTURB_MERGE_COS = floatArrayOf(0.4f, 0.45f, 0.55f)
+    private val PERTURB_MERGE_COS = floatArrayOf(0.40f, 0.50f, 0.55f)
 
     fun plan(
         ws: List<WindowEmbedding>, durationSec: Float,
@@ -53,7 +53,7 @@ object OfflineFootagePlanner {
             if (best.value.toFloat() / inside.size < MIN_TAP_SHARE) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
             // Routed render needs other speakers to separate from; one cluster gives no such evidence.
             if (ca.clusterCount < 2) return PlanResult.Abstain(AbstainReason.SINGLE_CLUSTER)
-            val base = roles(ws, durationSec, tap, 0.5f)
+            val base = roles(ws, durationSec, tap, FootageAnalysis.DEFAULT_MERGE_COS)
             for (pm in PERTURB_MERGE_COS) {
                 val r = roles(ws, durationSec, tap, pm)
                 val agree = if (base == null || r == null) 0f else base.indices.count { base[it] == r[it] }.toFloat() / base.size
