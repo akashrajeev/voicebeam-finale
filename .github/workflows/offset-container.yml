@@ -19,6 +19,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: bash scripts/fetch_models.sh
+      - run: ./gradlew --no-daemon testDebugUnitTest -Dorg.gradle.jvmargs="-Xmx3g"
       - run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -38,7 +39,9 @@ jobs:
         with:
           name: offset-container-${{ github.sha }}
           path: |
-            app/build/reports/androidTests/
+            app/build/reports/
             app/build/outputs/androidTest-results/
             offset-container-log.txt
           retention-days: 1
+
+# Validate bounded edit-list start recovery
