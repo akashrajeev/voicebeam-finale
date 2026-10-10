@@ -1,0 +1,5 @@
+LibriSpeech test-clean, CC BY 4.0, Vassil Panayotov et al., derived LibriVox.
+https://www.openslr.org/12 ; subset https://github.com/csukuangfj/librispeech-subset
+Speaker1089 reference1089-134686-0002, enrollment1089-134686-0013.
+Speaker1221 distractor1221-135767-0005, enrollment1221-135767-0024.
+Synthetic equal-RMS overlap, repeated to 6 seconds. Not independent field evidence.

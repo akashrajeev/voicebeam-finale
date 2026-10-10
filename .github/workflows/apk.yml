@@ -1,0 +1,36 @@
+name: ENH-6-tested-apk
+# ENH-6: safe enhancement and enrollment. Bluetooth unchanged.
+on:
+  push:
+    branches: [experiment/enh-6-observation-2026-10-08]
+    paths: ['.github/workflows/apk.yml']
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Fetch models and sherpa-onnx library
+        run: bash scripts/fetch_models.sh
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest -Dorg.gradle.jvmargs="-Xmx4g"
+      - name: Build debug APK
+        run: ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest -Dorg.gradle.jvmargs="-Xmx4g"
+      - name: Show APK
+        run: |
+          ls -la app/build/outputs/apk/debug/
+          sha256sum app/build/outputs/apk/debug/*.apk
+          grep -ho 'tests="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VoiceBeam-ENH-6-app-and-startup-test
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+          retention-days: 1

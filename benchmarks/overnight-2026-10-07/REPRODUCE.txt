@@ -1,0 +1,10 @@
+Work directory must contain:
+  models/ (named sherpa-onnx release folders/files)
+  nptel-pure/ (extracted Pure-Set)
+  librispeech/ (csukuangfj/librispeech-subset clone)
+Copy the Python scripts here into that working directory, install Python 3.10 + sherpa-onnx 1.13.8, soundfile, scipy, numpy, onnxruntime, requests and jiwer, then run prepare.py.
+Run bench_asr.py current, bigger, moonshine; then bench_denoise.py and the denoised versions. Run bench_speaker.py and bench_eres2net.py. Run bench_vad.py, bench_vad_raw.py and bench_integrated_asr.py.
+The raw ONNX VAD script is the probability path; bench_vad.py is the segment-detector path. Keep them labelled separately.
+Python outputs are JSON per-clip records. WER is sum(S+D+I)/sum(reference words), not mean clip WER.
+Audio is not included; manifest hashes identify exact fixtures. Model release URLs are in REPORT.txt. Model snapshots are not immutable upstream, so record downloaded SHA256 before comparing future runs.
+Build: Java 17 + Android SDK 35, bash scripts/fetch_models.sh, then ./gradlew testDebugUnitTest assembleDebug. Workflow is disabled; this does not use GitHub Actions. Debug signing uses local Android debug key. Different key means do not attempt updating the original app; lab has separate application ID.

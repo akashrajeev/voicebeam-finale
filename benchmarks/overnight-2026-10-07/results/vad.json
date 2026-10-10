@@ -1,0 +1,962 @@
+[
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in0",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0007117343036475852
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in1",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0007005905252336268
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in2",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.000786477183678295
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in3",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0006834473322002134
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in4",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0010712975047978714
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in5",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0007183925540683412
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in6",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.00068658219471888
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in7",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0007046009586389203
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in8",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0007296573565208407
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in9",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0008306040346659617
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in10",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0010192956436576059
+  },
+  {
+    "arm": "energy",
+    "scenario": "silence",
+    "id": "in11",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0006778805216279564
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in0",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006570138413228631
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in1",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006597129763087554
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in2",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006601838567712763
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in3",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006770184600417414
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in4",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007134332166649949
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in5",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006687516196710863
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in6",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006684373190536931
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in7",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007176089892377468
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in8",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.000666653572395905
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in9",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.000666396620786197
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in10",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006870775004146846
+  },
+  {
+    "arm": "energy",
+    "scenario": "white-noise",
+    "id": "in11",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006712237120015578
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in0",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007351265696307865
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in1",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.000681984243044963
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in2",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006747591174879441
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in3",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006595836774341798
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in4",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006990095969303104
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in5",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007056833652699374
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in6",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007000932149241711
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in7",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006878427617287054
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in8",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006819666636648308
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in9",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007068708032914008
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in10",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007154429760113791
+  },
+  {
+    "arm": "energy",
+    "scenario": "hum",
+    "id": "in11",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006688142161813778
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in0",
+    "positive_fraction": 0.6964856230031949,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007019402111861354
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in1",
+    "positive_fraction": 0.7116182572614108,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006694455200853512
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in2",
+    "positive_fraction": 0.7214912280701754,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006925946711691025
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in3",
+    "positive_fraction": 0.9165378670788253,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007577537041504443
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in4",
+    "positive_fraction": 0.8811188811188811,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007086031387603849
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in5",
+    "positive_fraction": 0.9339285714285714,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.00066654430148727
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in6",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006618303993739878
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in7",
+    "positive_fraction": 0.8405797101449275,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007085937714427997
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in8",
+    "positive_fraction": 0.7609841827768014,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007020421659621062
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in9",
+    "positive_fraction": 0.9155313351498637,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007150858641027196
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in10",
+    "positive_fraction": 0.972972972972973,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007661776798868734
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-clean",
+    "id": "in11",
+    "positive_fraction": 0.4064748201438849,
+    "first_detection_from_inserted_boundary_s": 0.16799999999999993,
+    "rtf": 0.0007258582055291505
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in0",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007390068493102935
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in1",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007131244078268429
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in2",
+    "positive_fraction": 0.8673245614035088,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006998787148101608
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in3",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006660545704790849
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in4",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007354813142165371
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in5",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006883486631988074
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in6",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006670678808586388
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in7",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006650884727185059
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in8",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0006593036309594596
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in9",
+    "positive_fraction": 0.9986376021798365,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007429819386799908
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in10",
+    "positive_fraction": 1.0,
+    "first_detection_from_inserted_boundary_s": 0.008000000000000007,
+    "rtf": 0.0007058812204226997
+  },
+  {
+    "arm": "energy",
+    "scenario": "speech-noise-10dB",
+    "id": "in11",
+    "positive_fraction": 0.9982014388489209,
+    "first_detection_from_inserted_boundary_s": 0.02400000000000002,
+    "rtf": 0.0006603622003877702
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in0",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.005232826626716206
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in1",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.005863239340887218
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in2",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004108823859182613
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in3",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004159333009471871
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in4",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004093125098793978
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in5",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004107477415819993
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in6",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004041986960736366
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in7",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004909329715288079
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in8",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004411873682315098
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in9",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004438542203773153
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in10",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.005238364986125279
+  },
+  {
+    "arm": "silero",
+    "scenario": "silence",
+    "id": "in11",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004638876297179404
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in0",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004745898544520182
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in1",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.00492325962925062
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in2",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.00550310772198504
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in3",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0053587130596750385
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in4",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004330104662981562
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in5",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004519749977188474
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in6",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004636348886698284
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in7",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.00489810695932264
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in8",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.003994197134874373
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in9",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0046859122423697375
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in10",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.00418908223201188
+  },
+  {
+    "arm": "silero",
+    "scenario": "white-noise",
+    "id": "in11",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0045966237487349935
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in0",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.005196526683792526
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in1",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004420498043253407
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in2",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004444511242388736
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in3",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004421304023968967
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in4",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0043303943773292915
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in5",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004721079751800995
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in6",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004283734552537482
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in7",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.005285427402502464
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in8",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004375861428958699
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in9",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.004632351321826787
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in10",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.00568499363681569
+  },
+  {
+    "arm": "silero",
+    "scenario": "hum",
+    "id": "in11",
+    "positive_fraction": 0.0,
+    "first_detection_from_inserted_boundary_s": null,
+    "rtf": 0.0055453782716499605
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in0",
+    "positive_fraction": 0.732484076433121,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.005685826769408209
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in1",
+    "positive_fraction": 0.6431535269709544,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.005321875180231822
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in2",
+    "positive_fraction": 0.29605263157894735,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.005339768219906052
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in3",
+    "positive_fraction": 0.6111111111111112,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.006681779046231249
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in4",
+    "positive_fraction": 0.7209302325581395,
+    "first_detection_from_inserted_boundary_s": 0.21599999999999997,
+    "rtf": 0.005165296601552051
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in5",
+    "positive_fraction": 0.3464285714285714,
+    "first_detection_from_inserted_boundary_s": 0.21599999999999997,
+    "rtf": 0.006667572132493054
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in6",
+    "positive_fraction": 0.5126903553299492,
+    "first_detection_from_inserted_boundary_s": 0.248,
+    "rtf": 0.004508262740349874
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in7",
+    "positive_fraction": 0.8327974276527331,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.004848735482856954
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in8",
+    "positive_fraction": 0.5298245614035088,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.004483625281556339
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in9",
+    "positive_fraction": 0.3215258855585831,
+    "first_detection_from_inserted_boundary_s": 0.8560000000000001,
+    "rtf": 0.004564449056876739
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in10",
+    "positive_fraction": 0.937984496124031,
+    "first_detection_from_inserted_boundary_s": 0.28,
+    "rtf": 0.0044422373959837995
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-clean",
+    "id": "in11",
+    "positive_fraction": 0.6798561151079137,
+    "first_detection_from_inserted_boundary_s": 0.3440000000000001,
+    "rtf": 0.00438241390393941
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in0",
+    "positive_fraction": 0.7133757961783439,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.00457853010844586
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in1",
+    "positive_fraction": 0.6597510373443983,
+    "first_detection_from_inserted_boundary_s": 0.21599999999999997,
+    "rtf": 0.0045804994850706
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in2",
+    "positive_fraction": 0.2982456140350877,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.0044195548857688454
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in3",
+    "positive_fraction": 0.5771604938271605,
+    "first_detection_from_inserted_boundary_s": 0.21599999999999997,
+    "rtf": 0.004526378916686879
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in4",
+    "positive_fraction": 0.6837209302325581,
+    "first_detection_from_inserted_boundary_s": 0.28,
+    "rtf": 0.004228347070115189
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in5",
+    "positive_fraction": 0.2857142857142857,
+    "first_detection_from_inserted_boundary_s": 6.424,
+    "rtf": 0.004613682179033368
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in6",
+    "positive_fraction": 0.5329949238578681,
+    "first_detection_from_inserted_boundary_s": 0.248,
+    "rtf": 0.0047286001970169534
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in7",
+    "positive_fraction": 0.7395498392282959,
+    "first_detection_from_inserted_boundary_s": 0.18399999999999994,
+    "rtf": 0.004664200361453763
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in8",
+    "positive_fraction": 0.49473684210526314,
+    "first_detection_from_inserted_boundary_s": 0.31200000000000006,
+    "rtf": 0.004785791602844784
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in9",
+    "positive_fraction": 0.31607629427792916,
+    "first_detection_from_inserted_boundary_s": 0.8560000000000001,
+    "rtf": 0.004470142815526913
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in10",
+    "positive_fraction": 0.937984496124031,
+    "first_detection_from_inserted_boundary_s": 0.28,
+    "rtf": 0.004446923478547864
+  },
+  {
+    "arm": "silero",
+    "scenario": "speech-noise-10dB",
+    "id": "in11",
+    "positive_fraction": 0.6798561151079137,
+    "first_detection_from_inserted_boundary_s": 0.3440000000000001,
+    "rtf": 0.004737208559094064
+  }
+]
