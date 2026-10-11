@@ -6,6 +6,7 @@ import android.media.MediaFormat
 import android.os.SystemClock
 import com.akashrajeev.voicebeam.core.AudioAlignment
 import com.akashrajeev.voicebeam.core.Mp4TrackStarts
+import com.akashrajeev.voicebeam.core.TrackStartPolicy
 import java.io.File
 import java.nio.ByteOrder
 
@@ -18,23 +19,35 @@ object VideoAudioDecoder {
         try {
             ex.setDataSource(file.absolutePath)
             var audio = -1; var video = -1
+            val mimes = ArrayList<String>()
             for (i in 0 until ex.trackCount) {
                 val mime = ex.getTrackFormat(i).getString(MediaFormat.KEY_MIME) ?: ""
+                mimes.add(mime)
                 if (mime.startsWith("audio/") && audio < 0) audio = i
                 if (mime.startsWith("video/") && video < 0) video = i
             }
-            require(audio >= 0 && video >= 0) { "Choose a video with an audio track" }
+            require(audio >= 0) { "No audio track found in this video (${TrackStartPolicy.summary(mimes)})" }
+            require(video >= 0) { "No video track found in this file (${TrackStartPolicy.summary(mimes)})" }
             val vf = ex.getTrackFormat(video)
             val duration = vf.getLong(MediaFormat.KEY_DURATION)
             require(duration in 1000000L..120000000L) { "Choose a video between 1 and 120 seconds" }
+            // A NEGATIVE first sample time is legal (B-frame / edit-list offsets, typical of re-encoded shares); a track is empty only when the extractor has no current sample.
             ex.selectTrack(video)
+            val videoReadable = ex.sampleTrackIndex >= 0
             val videoStart = ex.sampleTime
             ex.unselectTrack(video); ex.selectTrack(audio)
+            val audioReadable = ex.sampleTrackIndex >= 0
             val audioStart = ex.sampleTime
-            require(videoStart >= 0 && audioStart >= 0) { "Choose a video with an audio track" }
+            require(audioReadable) { "The audio track could not be read (${TrackStartPolicy.summary(mimes)}; first sample reported at $audioStart us)" }
+            require(videoReadable) { "The video track could not be read (${TrackStartPolicy.summary(mimes)}; first sample reported at $videoStart us)" }
             // Phone recordings often start audio a little after video. ALIGN (pad or trim) instead of rejecting; only a >2 s offset is treated as broken.
-            val edits = Mp4TrackStarts.read(file)
-            val offsetUs = Mp4TrackStarts.effective(audioStart, edits.audioUs) - Mp4TrackStarts.effective(videoStart, edits.videoUs)
+            val offsetUs = try {
+                val edits = Mp4TrackStarts.read(file)
+                Mp4TrackStarts.effective(audioStart, edits.audioUs) - Mp4TrackStarts.effective(videoStart, edits.videoUs)
+            } catch (e: Exception) {
+                android.util.Log.w("OfflineFootage", "mp4 edit list unusable (${e.message}); using clamped sample times audio=$audioStart video=$videoStart")
+                TrackStartPolicy.offsetUs(audioStart, videoStart)
+            }
             AudioAlignment.leadingSamples(offsetUs, 16000) // throws the old "offset is unsupported" message beyond the cap
             val format = ex.getTrackFormat(audio)
             val decoder = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
