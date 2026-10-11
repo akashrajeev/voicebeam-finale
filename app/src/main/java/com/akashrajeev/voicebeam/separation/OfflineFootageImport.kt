@@ -113,9 +113,26 @@ object OfflineFootageImport {
             } finally { embed.release() }   // the denoised copy is KEPT for the render (denoiseRender); it is freed when this call returns
             coroutineContext.ensureActive()
             val tap = if (tapStart != null && tapEnd != null) FootageAnalysis.Interval(tapStart.toFloat(), tapEnd.toFloat()) else null
-            val plan = if (windows == null || windows.isEmpty()) PlanResult.Abstain(AbstainReason.NO_CLUSTER)
-                       else OfflineFootagePlanner.plan(windows, duration, tap = tap,
-                            profile = if (embedsDenoised) OfflineFootagePlanner.MergeProfile.DENOISED else OfflineFootagePlanner.MergeProfile.RAW)
+            // Abstained short windows (e.g. a 1 s intro) are re-attached to the target by RAW embeddings (AbstainAttach, PROVISIONAL).
+            // Only when clustering used denoised embeddings; a second VoicePrint is created lazily and only if a window needs it.
+            var rawVp: VoicePrint? = null
+            val rawWindows = windows
+            val rawEmbedAt: (Int) -> FloatArray? = { i ->
+                val w = rawWindows!![i]
+                val a = (w.startSec * 16000).toInt().coerceIn(0, samples.size)
+                val b = (w.endSec * 16000).toInt().coerceIn(a, samples.size)
+                if (b - a < 16000) null else {
+                    val vp = rawVp ?: VoicePrint(context.assets).also { rawVp = it }
+                    vp.embed(samples.copyOfRange(a, b))
+                }
+            }
+            val rawEmbedArg: ((Int) -> FloatArray?)? = if (embedsDenoised && rawWindows != null) rawEmbedAt else null
+            val plan = try {
+                if (windows == null || windows.isEmpty()) PlanResult.Abstain(AbstainReason.NO_CLUSTER)
+                else OfflineFootagePlanner.plan(windows, duration, tap = tap,
+                    profile = if (embedsDenoised) OfflineFootagePlanner.MergeProfile.DENOISED else OfflineFootagePlanner.MergeProfile.RAW,
+                    rawEmbed = rawEmbedArg)
+            } finally { try { rawVp?.release() } catch (_: Throwable) {} }
 
             if (plan is PlanResult.Abstain) {
                 return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, plan.reason, dir, diag.toString() + "stage=plan")
@@ -124,8 +141,9 @@ object OfflineFootageImport {
 
             // ---- reference guard (existing) on the planner's reference
             val reference = concat(samples, plan.reference)
-            if (!OfflineQualityGuard.reference(context, reference))
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + "stage=reference-guard")
+            val refReport = OfflineQualityGuard.referenceReport(context, reference)
+            if (!refReport.trusted)
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + refReport.diagLine() + "stage=reference-guard")
 
             // ---- extraction (existing, blocking <= 180 s, no cancel param)
             onProgress(FootageStage.EXTRACT, 0f)
