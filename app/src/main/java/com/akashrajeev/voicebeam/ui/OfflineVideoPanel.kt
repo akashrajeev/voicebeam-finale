@@ -81,6 +81,7 @@ fun OfflineVideoPanel(
     var durationSec by remember { mutableStateOf(120f) }
     var usedProposal by remember { mutableStateOf(false) }
     var confirmed by remember { mutableStateOf(false) }
+    var showManual by remember { mutableStateOf(false) }
     // face-tap lane (optional: any failure leaves the typed reference as the path)
     var scanJob by remember { mutableStateOf<Job?>(null) }
     var proposeJob by remember { mutableStateOf<Job?>(null) }
@@ -136,15 +137,15 @@ fun OfflineVideoPanel(
                     try {
                         val f=withContext(Dispatchers.Default) { OfflineFaceFeed.analyze(context,selected,isCancelled={ !isActive }) }
                         val first=f?.binner?.firstFaceSec()
-                        if(f==null || first==null) { faceNote="Couldn't get a face to tap (no face was detected, or this video/phone couldn't be analysed). Type the moment below." }
+                        if(f==null || first==null) { faceNote="Couldn't get a face to tap (no face was detected, or this video/phone couldn't be analysed). You can type a window under Advanced below." }
                         else {
                             val sec=first.coerceIn(0f,durationSec)
                             val bmp=withContext(Dispatchers.IO) { previewFrame(context,selected,sec) }
                             feed=f; previewSec=sec; sliderSec=sec; preview=bmp
-                            faceNote=if(bmp==null) "Couldn't show a preview. Type the moment below." else "Tap the person you want to keep. You can scrub to another moment."
+                            faceNote=if(bmp==null) "Couldn't show a preview. You can type a window under Advanced below." else "Tap the person you want to keep. You can scrub to another moment."
                         }
                     } catch(e:CancellationException) { throw e }
-                    catch(e:Throwable) { faceNote="Face lookup failed. Type the moment below." }
+                    catch(e:Throwable) { faceNote="Face lookup failed. You can type a window under Advanced below." }
                     finally { scanning=false }
                 }
             }
@@ -181,7 +182,7 @@ fun OfflineVideoPanel(
                                 val id=fd.binner.idAt(o.x/size.width, o.y/size.height, previewSec)
                                 if(id==null) { faceNote="That isn't on a face. Tap a face box." }
                                 else {
-                                    tapId=id; faceProposal=null; usedProposal=false; confirmed=false
+                                    tapId=id; faceProposal=null; usedProposal=false; confirmed=false; showManual=false
                                     proposing=true; faceNote="Looking for a moment where this person speaks alone..."
                                     proposeJob?.cancel()
                                     proposeJob=scope.launch {
@@ -193,8 +194,9 @@ fun OfflineVideoPanel(
                                             val enr=com.akashrajeev.voicebeam.engine.EnrolledVoiceStore.load(context)
                                             if(fp!=null) { faceNote="Isolating this person..."; proposing=false; startRun(it,fp.interval.startSec.toDouble(),fp.interval.endSec.toDouble(),null) }
                                             else if(enr!=null) { faceNote="No clean solo moment for this face. Using your enrolled voice..."; proposing=false; startRun(it,null,null,enr) }
+                                            else { showManual=true; faceNote=faceNote+"\n"+OfflineFaceProposal.lastDiag }
                                         } catch(e:CancellationException) { throw e }
-                                        catch(e:Throwable) { faceNote=FaceProposalResult.failedText(e.message ?: e.javaClass.simpleName) }
+                                        catch(e:Throwable) { faceNote=FaceProposalResult.failedText(e.message ?: e.javaClass.simpleName); showManual=true }
                                         finally { proposing=false }
                                     }
                                 }
@@ -217,6 +219,16 @@ fun OfflineVideoPanel(
                     Text("Preview at ${"%.1f".format(previewSec)} s",color=Muted,style=MaterialTheme.typography.bodySmall)
                 }
                 if(proposing) CircularProgressIndicator()
+                if(showManual && !busy) {
+                    Text("Advanced: type a window (3-10 s) where only the target speaks.",color=Muted,style=MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(start,{start=it},label={Text("Start seconds")},singleLine=true,modifier=Modifier.testTag("referenceStart"))
+                    OutlinedTextField(end,{end=it},label={Text("End seconds")},singleLine=true,modifier=Modifier.testTag("referenceEnd"))
+                    Button(onClick={
+                        val a0=start.toDoubleOrNull(); val b0=end.toDoubleOrNull()
+                        if(a0==null || b0==null || !a0.isFinite() || !b0.isFinite() || a0<0 || b0-a0 !in 3.0..10.0) result="Choose a valid 3-10 second window."
+                        else startRun(it,a0,b0,null)
+                    },enabled=!scanning && !proposing && allowed,modifier=Modifier.testTag("runManualWindow")) { Text("Isolate with this window") }
+                }
                 if(busy) { CircularProgressIndicator(); Text("Working locally. Up to 3 minutes. Keep this screen open.") }
                 if(result.isNotBlank()) Text(result)
             } },
