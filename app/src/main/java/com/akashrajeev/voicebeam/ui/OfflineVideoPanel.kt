@@ -214,10 +214,11 @@ fun OfflineVideoPanel(
                         val fd=feed; val tid=tapId
                         val faceVis: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? =
                             if(fd!=null && tid!=null) { labels -> fd.binner.visibleWithAliases(tid,labels).visible } else null
+                    val lipSer: (() -> BooleanArray?)? = if(fd!=null && tid!=null) { { fd.binner.series(tid).targetLipOn } } else null
                         busy=true; result=""
                         importJob=scope.launch {
                             try {
-                                when(val r=OfflineFootageImport.run(context,it,if(tapOk) a0 else null,if(tapOk) b0 else null,faceVisibility=faceVis,enrolled=enrolledTpl)) {
+                                when(val r=OfflineFootageImport.run(context,it,if(tapOk) a0 else null,if(tapOk) b0 else null,faceVisibility=faceVis,enrolled=enrolledTpl,lipSeries=lipSer)) {
                                     is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Video ready. Tap the session below, then Original and Play video to compare. Isolation is not guaranteed."; closeDialog(); onImported() }
                                     is FootageResult.NeedsTap -> result="Original kept unchanged. The enrolled voice was not confidently found in this clip (" + r.reason.name + "). Type a 3-10 second moment where only the target speaks and use Isolate offline."
                                 }
@@ -241,10 +242,11 @@ fun OfflineVideoPanel(
                     val fd=feed; val tid=tapId
                     val faceVis: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? =
                         if(fd!=null && tid!=null) { labels -> fd.binner.visibleWithAliases(tid,labels).visible } else null
+                    val lipSer: (() -> BooleanArray?)? = if(fd!=null && tid!=null) { { fd.binner.series(tid).targetLipOn } } else null
                     busy=true; result=""
                     importJob=scope.launch {
                         try {
-                            when(val r=OfflineFootageImport.run(context,it,a,b,faceVisibility=faceVis)) {
+                            when(val r=OfflineFootageImport.run(context,it,a,b,faceVisibility=faceVis,lipSeries=lipSer)) {
                                 is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Video ready. Tap the session below, then Original and Play video to compare. Isolation is not guaranteed."; closeDialog(); onImported() }
                                 is FootageResult.NeedsTap -> result="Original kept unchanged. Choose a 3-10 second moment where only the target speaks (" + r.reason.name + ")."
                             }
