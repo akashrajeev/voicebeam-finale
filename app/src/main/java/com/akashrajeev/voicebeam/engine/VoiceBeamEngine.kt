@@ -218,6 +218,7 @@ class VoiceBeamEngine(private val app: Context) {
 
     /** Always-available withdraw: unlocks and forgets the learned voice. */
     fun withdrawConsent() {
+        EnrolledVoiceStore.clear(app)
         consent.withdraw("button")
         consentLogAdd("withdrawn_button", null, null, null)
         unlock()
@@ -225,7 +226,7 @@ class VoiceBeamEngine(private val app: Context) {
 
     @Volatile private var consentRecordCount = -1
 
-    fun deleteConsentRecords() { consentLog.deleteAll(); consentRecordCount = 0; publishConsent() }
+    fun deleteConsentRecords() { EnrolledVoiceStore.clear(app); consentLog.deleteAll(); consentRecordCount = 0; publishConsent() }
 
     private fun consentLogAdd(event: String, faceId: Int?, lip: Float?, heard: String?) {
         try { consentLog.add(System.currentTimeMillis(), event, faceId, lip, heard); consentRecordCount = consentLog.count() } catch (_: Throwable) {}
@@ -473,6 +474,7 @@ class VoiceBeamEngine(private val app: Context) {
                     latestWearerMatch = if (query != null && wearerTemplate != null)
                         com.akashrajeev.voicebeam.core.VoiceMatch.score(com.akashrajeev.voicebeam.core.VoiceMatch.cosine(query, wearerTemplate)) else null
                 }
+                if (!wasLearned && l.learned) { try { l.centroid?.let { EnrolledVoiceStore.save(app, it) } } catch (_: Throwable) {} }
                 if (BuildConfig.DEBUG && (!wasLearned && l.learned || score != null)) Log.i("VoiceBeamEngine", "voice: learned=" + l.learned + " progress=" + l.progress + " score=" + score + " lip=" + lip)
                 if (l.learned != _state.value.voiceLearned || score != null || l.progress != _state.value.voiceEnrollmentProgress || l.enrollmentEnabled != _state.value.voiceEnrollmentActive) {
                     _state.update { it.copy(voiceLearned = l.learned, voiceMatch = latestVoiceMatch, voiceEnrollmentActive = l.enrollmentEnabled, voiceEnrollmentProgress = l.progress) }
