@@ -25,7 +25,8 @@ object FootageRenderPipeline {
         // Default HARD_MUTE: non-target (OTHER_ONLY) and NONE bins are true silence; FLOOR keeps the old ducked behaviour.
         // Mute edges snap to the nearest VAD pause (BoundarySnap) so a turn change does not clip a word; the noise-floor option keeps the plain grid mute.
         var snapped = 0
-        val masked = if (silenceMode != SilenceMode.HARD_MUTE) floored
+        val masked = if (silenceMode == SilenceMode.DUCK) SilenceRender.duck(floored, denoised ?: source, labels, sampleRate)
+            else if (silenceMode != SilenceMode.HARD_MUTE) floored
             else if (snapToPauses && muteNoiseRms == 0f) {
                 val m = BoundarySnap.mask(labels, voiced, source.size, sampleRate); snapped = m.movedEdges
                 BoundarySnap.compose(floored, denoised ?: source, m, sampleRate)
