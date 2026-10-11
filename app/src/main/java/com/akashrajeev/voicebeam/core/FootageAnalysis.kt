@@ -219,6 +219,18 @@ class ClusteredAnalysis private constructor(
 
     fun forTarget(target: Int): TargetAnalysis = TargetAnalysis(this, target)
 
+    /**
+     * Attach embedded-but-unclustered windows to [target] by RAW-embedding evidence (see [AbstainAttach]).
+     * [rawEmbed] takes a window index. Returns this instance when nothing attaches. Purity of an attached window is its raw margin.
+     */
+    fun withAbstainedAttached(target: Int, rawEmbed: (Int) -> FloatArray?): ClusteredAnalysis {
+        val attach = AbstainAttach.decide(windows.map { it.emb != null }, result.assign, result.clusterCount, target, rawEmbed)
+        if (attach.isEmpty()) return this
+        val assign = result.assign.copyOf(); val purity = result.purity.copyOf()
+        for (a in attach) { assign[a.index] = target; purity[a.index] = a.margin }
+        return ClusteredAnalysis(windows, ClusterResult(assign, result.clusterCount, purity), durationSec)
+    }
+
     companion object {
         fun of(ws: List<WindowEmbedding>, durationSec: Float, mergeCos: Float = FootageAnalysis.DEFAULT_MERGE_COS, maxClusters: Int = 6, minClusterWindows: Int = 3) =
             ClusteredAnalysis(ws, FootageAnalysis.cluster(ws, mergeCos, maxClusters, minClusterWindows), durationSec)
