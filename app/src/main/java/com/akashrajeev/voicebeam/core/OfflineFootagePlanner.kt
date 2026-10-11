@@ -42,7 +42,9 @@ object OfflineFootagePlanner {
         tap: FootageAnalysis.Interval? = null,
         lipBinned: FloatArray? = null, otherLipBinned: List<FloatArray> = emptyList(),
         lipOnThreshold: Float = 0.5f, othersOffThreshold: Float = 0.3f,
-        profile: MergeProfile = MergeProfile.RAW
+        profile: MergeProfile = MergeProfile.RAW,
+        /** Tap path only: raw-audio embedding per WINDOW INDEX, used to re-attach abstained windows to the target (AbstainAttach, PROVISIONAL). Null = off. */
+        rawEmbed: ((Int) -> FloatArray?)? = null
     ): PlanResult {
         // Tap validation runs BEFORE any abstain so a malformed tap is always a caller error, never masked by NO_CLUSTER.
         if (tap != null) require(tap.startSec.isFinite() && tap.endSec.isFinite() && tap.startSec >= 0f && tap.endSec > tap.startSec && tap.endSec <= durationSec) { "tap outside audio" }
@@ -69,7 +71,7 @@ object OfflineFootagePlanner {
                 val agree = if (base == null || r == null) 0f else base.indices.count { base[it] == r[it] }.toFloat() / base.size
                 if (agree < MIN_PLAN_STABILITY) return PlanResult.Abstain(AbstainReason.PLAN_UNSTABLE)
             }
-            return finish(ca, best.key, TargetSource.TAP, listOf(tap))
+            return finish(if (rawEmbed != null) ca.withAbstainedAttached(best.key, rawEmbed) else ca, best.key, TargetSource.TAP, listOf(tap))
         }
 
         if (lipBinned == null) return PlanResult.Abstain(AbstainReason.TAP_REQUIRED)
