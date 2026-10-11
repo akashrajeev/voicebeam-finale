@@ -56,8 +56,8 @@ object OfflineFootageImport {
         denoiseFrontEnd: Boolean = true,
         /** Extractor-health relabel of TARGET_ONLY bins (TargetEvidence). OFF until eval's false-flag numbers land. */
         targetEvidence: Boolean = false,
-        /** Non-target and empty bins: HARD_MUTE (default, user verdict 2026-10-11) = true silence; FLOOR = old ducked behaviour. */
-        silenceMode: SilenceMode = SilenceMode.HARD_MUTE,
+        /** Non-target and empty bins: DUCK (default) = attenuate to a low floor (-26 dB); HARD_MUTE = true silence; FLOOR = old ducked behaviour. */
+        silenceMode: SilenceMode = SilenceMode.DUCK,
         /** Render the target bins from the DENOISED audio (level-matched, gate-checked, falls back to the mixture with a report line). Needs the denoiser to have run. */
         denoiseRender: Boolean = true,
         /** Face-tap target: given the audio-plan labels, per-0.5 s "target face tracked" flags (FaceTrackBinner.visibleWithAliases). Null (typed reference) = audio-only labels. */
@@ -247,7 +247,7 @@ object OfflineFootageImport {
                 appendLine("None-bin ratio: ${g.noneRatio}; worst band excess (0-4 kHz, 3 bands): ${g.worstBandExcessDb} dB")
                 appendLine("Embeddings: ${if (embedsDenoised) "denoised (pin 0.41)" else "raw (pin 0.45)"}")
                 appendLine("Final 0.5 s bin labels (T=target only, O=other only, V=overlap, N=none): " + labels.joinToString("") { when (it) { FootageAnalysis.Seg.TARGET_ONLY -> "T"; FootageAnalysis.Seg.OTHER_ONLY -> "O"; FootageAnalysis.Seg.OVERLAP -> "V"; FootageAnalysis.Seg.NONE -> "N" } })
-                appendLine("Silence mode: ${if (silenceMode == SilenceMode.HARD_MUTE) "HARD_MUTE (non-target and empty bins are silent)" else "FLOOR (non-target ducked)"}")
+                appendLine("Silence mode: ${when (silenceMode) { SilenceMode.HARD_MUTE -> "HARD_MUTE (non-target and empty bins are silent)"; SilenceMode.DUCK -> "DUCK (non-target speakers/lips-stopped bins at -26 dB, not silent)"; else -> "FLOOR (non-target ducked)" }}")
                 appendLine("Noise suppression: ${limiterNote}${renderNote.replace("REASONS", rejected.joinToString("; ").ifEmpty { "n/a" })}")
                 appendLine("Mute edges moved to speech pauses: ${chosen.snappedEdges}; speech-level gain: ${"%.1f".format(chosen.gainDb)} dB")
                 appendLine("Face gate: $faceNote")
