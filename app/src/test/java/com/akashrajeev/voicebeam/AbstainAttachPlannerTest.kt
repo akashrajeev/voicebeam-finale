@@ -63,4 +63,15 @@ class AbstainAttachPlannerTest {
         val p = OfflineFootagePlanner.plan(ws, 20f, tap = tap, rawEmbed = { null }) as PlanResult.Plan
         assertEquals(base.labels, p.labels)
     }
+
+    @Test fun tapSpanningTwoClustersAbstainsWithMeasuredDetail() {
+        val ws = windows()
+        val r = OfflineFootagePlanner.plan(ws, 20f, tap = FootageAnalysis.Interval(6f, 10f))
+        assertTrue(r is PlanResult.Abstain)
+        r as PlanResult.Abstain
+        assertEquals(AbstainReason.TAP_NOT_IN_CLUSTER, r.reason)
+        assertTrue(r.detail, r.detail.contains("check=margin"))
+        assertTrue(r.detail, r.detail.contains("runner-up="))
+        assertTrue(r.detail, r.detail.contains("clusters=2"))
+    }
 }
