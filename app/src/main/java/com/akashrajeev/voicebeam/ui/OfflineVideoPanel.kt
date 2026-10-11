@@ -29,6 +29,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.akashrajeev.voicebeam.core.FaceProposalResult
 import com.akashrajeev.voicebeam.core.FootageAnalysis
 import com.akashrajeev.voicebeam.core.FootageUiText
 import com.akashrajeev.voicebeam.core.TapProposal
@@ -116,7 +117,7 @@ fun OfflineVideoPanel(
                     try {
                         val f=withContext(Dispatchers.Default) { OfflineFaceFeed.analyze(context,selected,isCancelled={ !isActive }) }
                         val first=f?.binner?.firstFaceSec()
-                        if(f==null || first==null) { faceNote="No faces found here. Type the moment below." }
+                        if(f==null || first==null) { faceNote="Couldn't get a face to tap (no face was detected, or this video/phone couldn't be analysed). Type the moment below." }
                         else {
                             val sec=first.coerceIn(0f,durationSec)
                             val bmp=withContext(Dispatchers.IO) { previewFrame(context,selected,sec) }
@@ -166,11 +167,11 @@ fun OfflineVideoPanel(
                                     proposeJob?.cancel()
                                     proposeJob=scope.launch {
                                         try {
-                                            val p=OfflineFaceProposal.compute(context,it,fd,id,isCancelled={ !isActive })
-                                            faceProposal=p
-                                            faceNote=if(p==null) "No clear solo moment for this person. Type one below." else "Found a suggested moment. Check it, then confirm."
+                                            val r=OfflineFaceProposal.compute(context,it,fd,id,isCancelled={ !isActive })
+                                            faceProposal=(r as? FaceProposalResult.Found)?.proposal
+                                            faceNote=FaceProposalResult.userText(r)
                                         } catch(e:CancellationException) { throw e }
-                                        catch(e:Throwable) { faceNote="Couldn't suggest a moment. Type one below." }
+                                        catch(e:Throwable) { faceNote=FaceProposalResult.failedText(e.message ?: e.javaClass.simpleName) }
                                         finally { proposing=false }
                                     }
                                 }
@@ -212,10 +213,14 @@ fun OfflineVideoPanel(
                 if(a==null || b==null || !a.isFinite() || !b.isFinite() || a<0 || b-a !in 3.0..10.0 || !ok) { result=if(usedProposal && !confirmed) "Confirm the suggested moment first, or type your own." else if(tap.message.isNotBlank() && !tap.canStart && !usedProposal) tap.message else "Choose a valid 3-10 second reference" }
                 else {
                     scanJob?.cancel(); proposeJob?.cancel(); scanning=false; proposing=false
+                    // only a face-tap target gets face gating; a typed reference stays audio-only
+                    val fd=feed; val tid=tapId
+                    val faceVis: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? =
+                        if(fd!=null && tid!=null) { labels -> fd.binner.visibleWithAliases(tid,labels).visible } else null
                     busy=true; result=""
                     importJob=scope.launch {
                         try {
-                            when(val r=OfflineFootageImport.run(context,it,a,b)) {
+                            when(val r=OfflineFootageImport.run(context,it,a,b,faceVisibility=faceVis)) {
                                 is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Video ready. Tap the session below, then Original and Play video to compare. Isolation is not guaranteed."; closeDialog(); onImported() }
                                 is FootageResult.NeedsTap -> result="Original kept unchanged. Choose a 3-10 second moment where only the target speaks (" + r.reason.name + ")."
                             }
