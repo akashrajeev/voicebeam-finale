@@ -78,4 +78,48 @@ class FaceTrackBinnerTest {
         assertEquals(0f, b.firstFaceSec()!!, 0.001f)
         assertTrue(FaceTrackBinner(dur).facesAt(2f).isEmpty()); assertNull(FaceTrackBinner(dur).firstFaceSec())
     }
+
+    @Test fun visibleMarksBinsWhereTheTargetFaceWasTracked() {
+        val b = FaceTrackBinner(dur); feed(b, 5f)
+        val v = b.visible(b.idAt(0.2f, 0.45f, 1f)!!)
+        assertEquals(40, v.size); assertTrue(v[0]); assertTrue(v[9]); assertFalse(v[10]); assertFalse(v[39])
+    }
+
+    private fun lbl(s: String) = Array(s.length) { when (s[it]) { 'T' -> FootageAnalysis.Seg.TARGET_ONLY; 'O' -> FootageAnalysis.Seg.OTHER_ONLY; else -> FootageAnalysis.Seg.NONE } }
+
+    /** A talks at left 0-8 s, leaves, a face reappears at right 10-18 s (new tracker id) talking; no other face in frame. */
+    private fun reentry(returnsTalking: Boolean): FaceTrackBinner {
+        val b = FaceTrackBinner(dur); var i = 0; var t = 0
+        while (t < 18000) {
+            val s = t / 1000f
+            when {
+                s < 8f -> b.add(t.toLong(), listOf(FaceObservation(left, talking(i))))
+                s >= 10f -> b.add(t.toLong(), listOf(FaceObservation(right, if (returnsTalking) talking(i) else still)))
+                else -> b.add(t.toLong(), emptyList())
+            }
+            i++; t += 100
+        }
+        return b
+    }
+
+    @Test fun reenteringFaceThatSpeaksOnTargetBinsIsTheSamePerson() {
+        val b = reentry(true); val id = b.idAt(0.2f, 0.45f, 1f)!!
+        assertEquals(2, b.trackIds().size)
+        val v = b.visibleWithAliases(id, lbl("T".repeat(36) + "N".repeat(4)))
+        assertEquals(1, v.aliasIds.size); assertTrue(v.visible[25]); assertFalse(b.visible(id)[25])
+    }
+    @Test fun faceThatSpeaksWhereTheAudioSaysOtherIsNotAnAlias() {
+        val b = reentry(true); val id = b.idAt(0.2f, 0.45f, 1f)!!
+        val v = b.visibleWithAliases(id, lbl("T".repeat(16) + "O".repeat(20) + "N".repeat(4)))
+        assertTrue(v.aliasIds.isEmpty()); assertFalse(v.visible[25])
+    }
+    @Test fun silentReturningFaceIsNotAnAlias() {
+        val b = reentry(false); val id = b.idAt(0.2f, 0.45f, 1f)!!
+        assertTrue(b.visibleWithAliases(id, lbl("T".repeat(36) + "N".repeat(4))).aliasIds.isEmpty())
+    }
+    @Test fun faceSharingAFrameWithTheTargetIsNeverAnAlias() {
+        val b = FaceTrackBinner(dur); feed(b)
+        val id = b.idAt(0.2f, 0.45f, 1f)!!
+        assertTrue(b.visibleWithAliases(id, lbl("T".repeat(40))).aliasIds.isEmpty())
+    }
 }
