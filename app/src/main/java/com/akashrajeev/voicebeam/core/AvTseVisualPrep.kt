@@ -59,6 +59,30 @@ object AvTseVisualPrep {
         return out
     }
 
+    /** Per-frame track (cx, cy, bs) in source pixels. */
+    class Track(val cx: DoubleArray, val cy: DoubleArray, val bs: DoubleArray)
+
+    /**
+     * Calibrated landmark -> upstream-S3FD-box mapping (fitted on the demo clip: 2 faces x 4 frames; A/B in the real model, see notes).
+     * lm* = min/max over ALL 478 FaceLandmarker landmarks, in SOURCE pixels (x*width, y*height) for ONE frame.
+     *   bs = 1.04 * max(w,h)/2 ; cx = centre x ; cy = centre y - 0.05*h
+     */
+    fun landmarkBoxToCrop(minX: Double, minY: Double, maxX: Double, maxY: Double): DoubleArray {
+        val w = maxX - minX; val h = maxY - minY
+        return doubleArrayOf((minX + maxX) / 2, (minY + maxY) / 2 - 0.05 * h, 1.04 * max(w, h) / 2)  // [cx, cy, bs]
+    }
+
+    /** Build a smoothed track (median filter 13 over the 25fps frame sequence) from per-frame landmark crops [cx,cy,bs]. */
+    fun smoothTrack(perFrame: List<DoubleArray>): Track {
+        val cx = medfilt13(DoubleArray(perFrame.size) { perFrame[it][0] })
+        val cy = medfilt13(DoubleArray(perFrame.size) { perFrame[it][1] })
+        val bs = medfilt13(DoubleArray(perFrame.size) { perFrame[it][2] })
+        return Track(cx, cy, bs)
+    }
+
+    /** Source-frame index for 25fps output frame i (nearest to i*40ms), like ffmpeg -r 25. */
+    fun sourceFrameFor25fps(i: Int, srcFps: Double, srcFrames: Int): Int = min(srcFrames - 1, Math.round(i * 40.0 / 1000.0 * srcFps).toInt())
+
     /** Audio normalisation upstream applies before windowing: audio /= max(abs(audio)) (peak normalise). */
     fun peakNormalize(a: FloatArray) {
         var m = 0f; for (v in a) m = max(m, kotlin.math.abs(v))
