@@ -19,6 +19,8 @@ import kotlinx.coroutines.withContext
  * panel's proposal param; typed input still always wins there.
  */
 object OfflineFaceProposal {
+    /** Last proposal's evidence counts, shown on screen so a missing window can be explained. */
+    @Volatile var lastDiag: String = ""
 
     /**
      * Proposal for [targetId] (from FaceTrackBinner.idAt): Found, NoWindow (everything was read, nothing qualifies) or Failed(reason) (decode/VAD/IO error).
@@ -47,7 +49,14 @@ object OfflineFaceProposal {
             val series = feed.binner.series(targetId)
             val lip = series.targetLipOn.copyOf(bins)          // grown bins: false = not talking (conservative)
             val others = series.othersOff?.copyOf(bins)        // grown bins: false = other not proven silent (conservative)
-            val p = TapProposal.propose(lip, others, speech, durationSec)
+            val strict = TapProposal.propose(lip, others, speech, durationSec)
+            // crowd clips: other faces' lips flicker, so no strict solo window exists. Fall back to the tapped lips + speech only (WEAK); the planner's cluster margin
+            // and the face/voice cross-check still guard against the wrong person.
+            val p = strict ?: TapProposal.propose(lip, null, speech, durationSec)
+            val binLen = (FootageAnalysis.BIN_SEC * 16000).toInt()
+            val spOk = BooleanArray(bins) { b -> val a = b * binLen; val e = minOf(samples.size, a + binLen); e - a >= binLen / 2 && com.akashrajeev.voicebeam.core.FootageWindows.speechCoverage(speech, a, e) >= TapProposal.MIN_BIN_SPEECH }
+            lastDiag = "Evidence per 0.5 s: bins=$bins, tapped lips on=${lip.count { it }}, other faces silent=${others?.count { it } ?: -1} (-1 = no other face), speech=${spOk.count { it }}, " +
+                "lips+speech=${(0 until bins).count { lip[it] && spOk[it] }}, strict window=${strict != null}, lips-only window=${p != null && strict == null}"
             if (p == null) FaceProposalResult.NoWindow else FaceProposalResult.Found(p)
         } catch (t: Throwable) {
             if (t is kotlinx.coroutines.CancellationException) throw t
