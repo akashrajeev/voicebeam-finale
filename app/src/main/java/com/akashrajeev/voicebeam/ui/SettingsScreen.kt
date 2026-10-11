@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -49,6 +53,16 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
     }
     val s by engine.settings.collectAsState()
     val state by engine.state.collectAsState()
+    var hasKey by remember { mutableStateOf(engine.hasDeepgramKey()) }
+    var keyInput by remember { mutableStateOf("") }
+    var showDeepgramConsent by remember { mutableStateOf(false) }
+    if (showDeepgramConsent) AlertDialog(
+        onDismissRequest = { showDeepgramConsent = false },
+        title = { Text("Send audio to Deepgram?") },
+        text = { Text("Cloud captions send the microphone audio, including other people's voices, over the internet to Deepgram while you listen. Deepgram's terms apply. Only turn this on if everyone nearby is fine with that. On-device captions stay available.") },
+        confirmButton = { TextButton(onClick = { engine.updateSettings { it.copy(deepgramCaptions = true) }; showDeepgramConsent = false }) { Text("I understand, turn on") } },
+        dismissButton = { TextButton(onClick = { showDeepgramConsent = false }) { Text("Cancel") } },
+    )
     Column(Modifier.fillMaxSize().background(Bg)) {
         Column(Modifier.weight(1f).statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
             Text("Settings", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
@@ -62,6 +76,19 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SwitchRow("Point mic at the scene", "Uses the camcorder mic setup, best with the back camera", s.useSceneMic) { v -> engine.updateSettings { it.copy(useSceneMic = v) } }
             SectionHeader("Captions")
             ValueRow("Language", "English")
+            SwitchRow("On-device captions (Moonshine)", "Default. Runs on this phone, nothing leaves it", s.moonshineCaptions) { v -> engine.updateSettings { it.copy(moonshineCaptions = v) } }
+            SwitchRow("Cloud captions (Deepgram)", "Off by default. When on, microphone audio is sent to Deepgram. Status: ${engine.deepgramStatus()}", s.deepgramCaptions) { v ->
+                if (v) showDeepgramConsent = true else engine.updateSettings { it.copy(deepgramCaptions = false) }
+            }
+            if (s.deepgramCaptions || hasKey) {
+                Text(if (hasKey) "Deepgram key saved on this phone, encrypted" else "Paste your Deepgram API key. It stays on this phone only.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                if (!hasKey) {
+                    OutlinedTextField(keyInput, { keyInput = it }, singleLine = true, label = { Text("Deepgram API key") },
+                        visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    Button(onClick = { engine.setDeepgramKey(keyInput); keyInput = ""; hasKey = engine.hasDeepgramKey() }, enabled = keyInput.isNotBlank()) { Text("Save key") }
+                } else Button(onClick = { engine.clearDeepgramKey(); hasKey = false; engine.updateSettings { it.copy(deepgramCaptions = false) } }) { Text("Remove key") }
+            }
+            if (!s.moonshineCaptions && !s.deepgramCaptions) Text("Both caption sources are off, so there are no captions. Saying \"I agree\" for consent also needs captions; the thumbs-up still works.", color = Muted, fontSize = 12.sp)
             SwitchRow("Require thumbs-up AND \"I agree\"", "Stricter consent: both within 5 seconds. Off = either one is enough", s.requireBothConsent) { v -> engine.updateSettings { it.copy(requireBothConsent = v) } }
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
             Text("Caption size", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
@@ -107,7 +134,8 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             }
             Text(diagnosticText.lines().takeLast(12).joinToString("\n"), color = Muted, fontSize = 10.sp)
             SectionHeader("Privacy")
-            Text("Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account and uploads nothing. The only network use is the optional stage-caption page on your own Wi-Fi.",
+            Text(if (s.deepgramCaptions) "Cloud captions (Deepgram) are ON: microphone audio is sent to Deepgram while you listen. Noise removal, face tracking and voice matching still run on this phone. VoiceBeam has no account. The stage-caption page is optional and stays on your own Wi-Fi."
+                else "Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account and uploads nothing. The only network use is the optional stage-caption page on your own Wi-Fi.",
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
             ValueRow("Version", BuildConfig.VERSION_NAME)
         }

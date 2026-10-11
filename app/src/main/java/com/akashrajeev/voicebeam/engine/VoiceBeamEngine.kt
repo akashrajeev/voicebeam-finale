@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import com.akashrajeev.voicebeam.BuildConfig
 import com.akashrajeev.voicebeam.core.CaptionSegment
 import com.akashrajeev.voicebeam.core.Captions
+import com.akashrajeev.voicebeam.core.DeepgramTranscript
 import com.akashrajeev.voicebeam.core.ConsentGate
 import com.akashrajeev.voicebeam.core.ConsentLog
 import com.akashrajeev.voicebeam.core.ConsentPhase
@@ -55,6 +56,22 @@ class VoiceBeamEngine(private val app: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val settingsStore = SettingsStore(app)
     val sessions = SessionStore(app)
+    private val secrets = SecretStore(app)
+    @Volatile private var deepgramKey: String? = secrets.get("deepgram")
+    @Volatile private var deepgramReset = false
+    @Volatile private var deepgram: DeepgramClient? = null
+    fun hasDeepgramKey(): Boolean = deepgramKey != null
+    fun setDeepgramKey(key: String) {
+        val k = key.trim()
+        if (k.isEmpty()) return
+        secrets.put("deepgram", k); deepgramKey = k; deepgramReset = true
+    }
+    fun clearDeepgramKey() { secrets.clear("deepgram"); deepgramKey = null; deepgramReset = true }
+    fun deepgramStatus(): String = when {
+        !_settings.value.deepgramCaptions -> "Off"
+        deepgramKey == null -> "Add a key"
+        else -> deepgram?.status?.replaceFirstChar { it.uppercase() } ?: "Starts when listening"
+    }
 
     private val _settings = MutableStateFlow(settingsStore.load())
     val settings: StateFlow<Settings> = _settings.asStateFlow()
@@ -377,6 +394,7 @@ class VoiceBeamEngine(private val app: Context) {
         pipeline?.stop(); pipeline = null
         captionThread?.join(1500); voiceThread?.join(1500)
         captionThread = null; voiceThread = null
+        deepgram?.close(); deepgram = null
         _state.update { it.copy(listening = false, partial = "", inputLevel = 0f) }
         lifecycle.finishStop()
     }
@@ -418,8 +436,21 @@ class VoiceBeamEngine(private val app: Context) {
                     if (fill == block.size) {
                         val speechy = packet.voiceActive
                         val asrStart = SystemClock.elapsedRealtimeNanos()
-                        val (text, ended) = try { m.asr.accept(block.copyOf()) } catch (t: Throwable) {
-                            Diagnostics.event("asr_error=" + t.javaClass.simpleName); Pair("", false)
+                        val cs = _settings.value
+                        if (deepgramReset) { deepgram?.close(); deepgram = null; deepgramReset = false }
+                        val key = deepgramKey
+                        if (cs.deepgramCaptions && key != null) { if (deepgram == null) deepgram = DeepgramClient(key, DeepgramTranscript()) }
+                        else if (deepgram != null) { deepgram?.close(); deepgram = null }
+                        val dg = deepgram
+                        val dgLive = dg != null && try { dg.send(block.copyOf()) } catch (t: Throwable) { false }
+                        val (text, ended) = if (dgLive) {
+                            dg!!.transcript.poll()
+                        } else if (cs.moonshineCaptions) {
+                            try { m.asr.accept(block.copyOf()) } catch (t: Throwable) {
+                                Diagnostics.event("asr_error=" + t.javaClass.simpleName); Pair("", false)
+                            }
+                        } else {
+                            Pair("", false) // both caption sources off: no captions
                         }
                         if (++diagnosticAsrBlocks % 10 == 0) Diagnostics.event("asrUs=" + (SystemClock.elapsedRealtimeNanos() - asrStart) / 1000 + " queue=" + p.asrQueue.size)
                         assembler.advanceTo(maxOf(0L, packet.captureMs * SAMPLE_RATE / 1000 - (f.size - off) - block.size))
