@@ -1,7 +1,7 @@
 package com.akashrajeev.voicebeam.core
 
 enum class AbstainReason { NO_CLUSTER, SINGLE_CLUSTER, TAP_REQUIRED, TAP_NOT_IN_CLUSTER, REFERENCE_TOO_SHORT, LIP_AMBIGUOUS, GUARD_REJECTED, PLAN_UNSTABLE, EVIDENCE_CONTRADICTS_PLAN }
-enum class TargetSource { TAP, FACE }
+enum class TargetSource { TAP, FACE, ENROLLED }
 
 sealed class PlanResult {
     class Plan(
@@ -85,6 +85,54 @@ object OfflineFootagePlanner {
         val ref = ta.autoReference(lipOn = FootageWindows.lipOn(lipBinned, lipOnThreshold), othersOffLip = othersOff)
         if (ref == null) return PlanResult.Abstain(if (ca.clusterCount < 2 && othersOff == null) AbstainReason.SINGLE_CLUSTER else AbstainReason.REFERENCE_TOO_SHORT)
         return PlanResult.Plan(asg.cluster, ca.clusterCount, TargetSource.FACE, ref, ta.labels, ta.purity)
+    }
+
+    /**
+     * ENROLLED reference: the cluster whose windows are, on average, closest to an already-learned voice template. A claim about IDENTITY (the template's person), so it is held to
+     * an absolute floor AND a margin over every other cluster AND the same threshold-stability check as a tap. Abstains (never guesses) otherwise; the caller then falls back to a tap.
+     * Reference audio comes from bins where ONLY that cluster is active (autoReference), the same rule as the face path; the reference guard still runs afterwards.
+     * PROVISIONAL numbers: the template was learned on the live mic, the clip may differ in channel.
+     */
+    const val ENROLLED_MIN_COS = 0.35f
+    const val ENROLLED_MIN_MARGIN = 0.12f
+
+    private class EnrolledPick(val ca: ClusteredAnalysis?, val target: Int, val roles: IntArray?, val detail: String, val clusters: Int)
+
+    private fun pickEnrolled(ws: List<WindowEmbedding>, durationSec: Float, enrolled: FloatArray, mergeCos: Float): EnrolledPick {
+        val ca = ClusteredAnalysis.of(ws, durationSec, mergeCos)
+        if (ca.clusterCount < 2) return EnrolledPick(null, -1, null, "clusters=${ca.clusterCount}", ca.clusterCount)
+        val cl = ca.windowClusters()
+        val sum = FloatArray(ca.clusterCount); val n = IntArray(ca.clusterCount)
+        for (i in ws.indices) {
+            val e = ws[i].emb ?: continue
+            if (cl[i] < 0 || e.size != enrolled.size) continue
+            sum[cl[i]] += FootageAnalysis.cosine(e, enrolled); n[cl[i]]++
+        }
+        val mean = FloatArray(ca.clusterCount) { if (n[it] == 0) -1f else sum[it] / n[it] }
+        val order = mean.indices.sortedByDescending { mean[it] }
+        val best = order[0]; val runner = order[1]
+        val detail = "enrolled cosine per cluster=" + mean.joinToString(",") { "%.2f".format(it) } + ", clusters=${ca.clusterCount}"
+        if (mean[best] < ENROLLED_MIN_COS) return EnrolledPick(ca, -1, null, "$detail; check=best %.2f < $ENROLLED_MIN_COS".format(mean[best]), ca.clusterCount)
+        if (mean[best] - mean[runner] < ENROLLED_MIN_MARGIN) return EnrolledPick(ca, -1, null, "$detail; check=margin %.2f < $ENROLLED_MIN_MARGIN".format(mean[best] - mean[runner]), ca.clusterCount)
+        val roles = IntArray(ws.size) { if (cl[it] < 0) 0 else if (cl[it] == best) 1 else 2 }
+        return EnrolledPick(ca, best, roles, detail, ca.clusterCount)
+    }
+
+    fun planEnrolled(ws: List<WindowEmbedding>, durationSec: Float, enrolled: FloatArray, profile: MergeProfile = MergeProfile.RAW): PlanResult {
+        require(enrolled.isNotEmpty() && enrolled.all { it.isFinite() }) { "bad enrolled template" }
+        if (ws.isEmpty()) return PlanResult.Abstain(AbstainReason.NO_CLUSTER)
+        val base = pickEnrolled(ws, durationSec, enrolled, profile.pin)
+        val ca = base.ca; val baseRoles = base.roles
+        if (ca == null) return PlanResult.Abstain(if (base.clusters == 0) AbstainReason.NO_CLUSTER else AbstainReason.SINGLE_CLUSTER, base.detail)
+        if (baseRoles == null) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER, base.detail)
+        for (pm in profile.perturb) {
+            val r = pickEnrolled(ws, durationSec, enrolled, pm).roles
+            val agree = if (r == null) 0f else baseRoles.indices.count { baseRoles[it] == r[it] }.toFloat() / baseRoles.size
+            if (agree < MIN_PLAN_STABILITY) return PlanResult.Abstain(AbstainReason.PLAN_UNSTABLE, "${base.detail}; role agreement %.2f < $MIN_PLAN_STABILITY at merge cosine $pm".format(agree))
+        }
+        val ta = ca.forTarget(base.target)
+        val ref = ta.autoReference() ?: return PlanResult.Abstain(AbstainReason.REFERENCE_TOO_SHORT, "${base.detail}; no 3 s of enrolled-voice-only speech")
+        return PlanResult.Plan(base.target, ca.clusterCount, TargetSource.ENROLLED, ref, ta.labels, ta.purity)
     }
 
     /** Window roles under a perturbed clustering: 0 = abstained, 1 = target cluster (chosen from the same tap), 2 = other. Null if no safe target. */
