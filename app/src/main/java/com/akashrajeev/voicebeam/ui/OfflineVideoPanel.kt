@@ -219,7 +219,7 @@ fun OfflineVideoPanel(
                         importJob=scope.launch {
                             try {
                                 when(val r=OfflineFootageImport.run(context,it,if(tapOk) a0 else null,if(tapOk) b0 else null,faceVisibility=faceVis,enrolled=enrolledTpl,lipSeries=lipSer)) {
-                                    is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Video ready. Tap the session below, then Original and Play video to compare. Isolation is not guaranteed."; closeDialog(); onImported() }
+                                    is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else footageDiag(r.meta.dir); onImported() }
                                     is FootageResult.NeedsTap -> result="Original kept unchanged. The enrolled voice was not confidently found in this clip (" + r.reason.name + "). Type a 3-10 second moment where only the target speaks and use Isolate offline."
                                 }
                             }
@@ -247,7 +247,7 @@ fun OfflineVideoPanel(
                     importJob=scope.launch {
                         try {
                             when(val r=OfflineFootageImport.run(context,it,a,b,faceVisibility=faceVis,lipSeries=lipSer)) {
-                                is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Video ready. Tap the session below, then Original and Play video to compare. Isolation is not guaranteed."; closeDialog(); onImported() }
+                                is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else footageDiag(r.meta.dir); onImported() }
                                 is FootageResult.NeedsTap -> result="Original kept unchanged. Choose a 3-10 second moment where only the target speaks (" + r.reason.name + ")."
                             }
                         }
@@ -260,4 +260,11 @@ fun OfflineVideoPanel(
             dismissButton={ TextButton(onClick={closeDialog()},enabled=!busy) {Text("Cancel")} }
         )
     }
+}
+
+/** On-screen diagnostics for a finished routed import, so the numbers can be read off the phone: target source, lip/face gate status, per-0.5 s bin labels. */
+private fun footageDiag(dir: java.io.File): String {
+    val keep = listOf("Target source", "Final 0.5 s bin labels", "Face gate", "Mute edges", "Embeddings", "Noise suppression")
+    val lines = try { java.io.File(dir, "footage-report.txt").readLines().filter { l -> keep.any { l.startsWith(it) } } } catch (e: Exception) { emptyList() }
+    return "Video ready: open the session below, Original then Play video, to compare. Isolation is not guaranteed.\n\n" + lines.joinToString("\n")
 }
