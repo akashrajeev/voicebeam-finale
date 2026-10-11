@@ -342,6 +342,10 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                 IconButton(onClick = { if (!state.recording.active) backCamera = !backCamera }) { Icon(Icons.Filled.Cameraswitch, "switch camera", tint = Color.White) }
             }
 
+            if (state.listening) Text("gate ${state.gateState}  match ${state.voiceMatch?.let { "%.2f".format(it) } ?: "-"}  gain ${"%.2f".format(state.gain)}  learned ${state.voiceLearned}",
+                color = Color(0xFFDDE5EA), fontSize = 9.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 56.dp).clip(RoundedCornerShape(4.dp)).background(Color(0x99000000)).padding(horizontal = 5.dp, vertical = 2.dp))
+
             // Caption card + controls.
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
                 val notice = when {
