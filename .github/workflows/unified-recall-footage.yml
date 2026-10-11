@@ -1,6 +1,6 @@
 name: Unified Recall and footage port validation
 # Targeted Listen gate tuning with Recall denoiser retained
-# Re-run trigger: phone APK SHA256 print + installer artifact (unified build + facetile24 + pass4_26 + pass6_28 band limiter)
+# Re-run trigger: phone APK SHA256 print + installer artifact (unified build + pass7_29 plan-stage diagnostics)
 on:
   push:
     branches: [unified-2026-10-11]
