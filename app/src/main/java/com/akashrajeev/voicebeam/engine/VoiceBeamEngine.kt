@@ -344,7 +344,7 @@ class VoiceBeamEngine(private val app: Context) {
             }
         }) { f ->
             latestProbability = f.probability
-            _state.update { it.copy(inputLevel = f.level, gain = f.gain, targetProbability = f.probability, earphones = f.monitorRoute) }
+            _state.update { it.copy(inputLevel = f.level, gain = f.gain, targetProbability = f.probability, gateState = f.gateState, earphones = f.monitorRoute) }
         }
         p.enrollmentActive = { learner?.enrollmentEnabled == true || wearerLearner?.enrollmentEnabled == true }
         p.enrollmentStatus = { enrollmentMessage() }
