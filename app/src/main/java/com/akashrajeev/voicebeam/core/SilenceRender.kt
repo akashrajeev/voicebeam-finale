@@ -5,10 +5,40 @@ import kotlin.math.max
 import kotlin.math.min
 
 /** FLOOR = old behaviour (OTHER/NONE ducked, NONE at 0.04 x source). HARD_MUTE = OTHER_ONLY and NONE bins become true silence. User ear verdict 2026-10-11: non-target must be completely gone. */
-enum class SilenceMode { FLOOR, HARD_MUTE }
+enum class SilenceMode { FLOOR, HARD_MUTE, DUCK }
 
 /** Pure helpers for the "only the target is heard" render. 16 kHz mono float. */
 object SilenceRender {
+    /** DUCK mode: OTHER_ONLY bins are replaced by [bed] (denoised or source audio) at this gain: -26 dB, "as low as background voices", never digital silence. */
+    const val DUCK_GAIN = 0.05f
+
+    /**
+     * Per-sample: outside ducked bins [audio] is kept; inside them the output is [bed] x [gain]. Linear [fadeSec] crossfades on the kept side of every boundary
+     * (same shape as [hardMute]) so a duck neither clicks nor leaks the unducked voice. Pure function of the labels, so the voice returns when a label does.
+     */
+    fun duck(
+        audio: FloatArray, bed: FloatArray, labels: Array<Seg>, sampleRate: Int, ducked: Set<Seg> = setOf(Seg.OTHER_ONLY),
+        gain: Float = DUCK_GAIN, fadeSec: Float = 0.015f
+    ): FloatArray {
+        val binLen = (FootageAnalysis.BIN_SEC * sampleRate).toInt()
+        require(binLen > 0 && labels.isNotEmpty() && labels.size * binLen >= audio.size && bed.size == audio.size) { "labels/bed do not cover the audio" }
+        require(gain.isFinite() && gain in 0f..1f && fadeSec.isFinite() && fadeSec in 0.01f..0.25f) { "bad duck parameters" }
+        val n = audio.size; val fade = max(1, (fadeSec * sampleRate).toInt())
+        fun isDucked(i: Int) = labels[min(labels.size - 1, i / binLen)] in ducked
+        val out = FloatArray(n)
+        for (i in 0 until n) {
+            if (isDucked(i)) { out[i] = bed[i] * gain; continue }
+            var best = Int.MAX_VALUE
+            for (d in 1..fade) {
+                if (i + d < n && isDucked(i + d)) { best = d; break }
+                if (i - d >= 0 && isDucked(i - d)) { best = d; break }
+            }
+            val w = if (best == Int.MAX_VALUE) 1f else min(1f, (best - 1).toFloat() / fade)
+            out[i] = audio[i] * w + bed[i] * gain * (1f - w)
+        }
+        return out
+    }
+
     /**
      * Every sample inside a bin whose label is in [muted] becomes exactly 0 (or deterministic noise at [noiseFloorRms] when > 0). Linear fades of [fadeSec] in the
      * NEIGHBOURING kept samples bring the gain to 0 at the boundary, so nothing leaks into a muted bin and there is no click. A pure per-sample function of the
