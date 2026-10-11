@@ -124,9 +124,8 @@ object OfflineFootageImport {
 
             // ---- reference guard (existing) on the planner's reference
             val reference = concat(samples, plan.reference)
-            val refReport = OfflineQualityGuard.referenceReport(context, reference)
-            if (!refReport.trusted)
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + refReport.diagLine() + "stage=reference-guard")
+            if (!OfflineQualityGuard.reference(context, reference))
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + "stage=reference-guard")
 
             // ---- extraction (existing, blocking <= 180 s, no cancel param)
             onProgress(FootageStage.EXTRACT, 0f)
