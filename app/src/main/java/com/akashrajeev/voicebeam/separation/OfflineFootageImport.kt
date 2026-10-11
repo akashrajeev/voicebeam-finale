@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import com.akashrajeev.voicebeam.core.AbstainReason
 import com.akashrajeev.voicebeam.core.BandLimiter
+import com.akashrajeev.voicebeam.core.WindowEmbedding
+import com.akashrajeev.voicebeam.core.WindowSuggester
 import com.akashrajeev.voicebeam.core.FaceVisibilityGate
 import com.akashrajeev.voicebeam.core.FinalAudioGuardMath
 import com.akashrajeev.voicebeam.core.SilenceMode
@@ -136,7 +138,8 @@ object OfflineFootageImport {
             } finally { try { rawVp?.release() } catch (_: Throwable) {} }
 
             if (plan is PlanResult.Abstain) {
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, plan.reason, dir, diag.toString() + "stage=plan" + (if (plan.detail.isEmpty()) "" else "; " + plan.detail))
+                val hint = if (tap != null) suggestWindow(context, samples, windows, duration, embedsDenoised, cancelled) else ""
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, plan.reason, dir, diag.toString() + "stage=plan" + (if (plan.detail.isEmpty()) "" else "; " + plan.detail) + hint)
             }
             plan as PlanResult.Plan
 
@@ -144,7 +147,7 @@ object OfflineFootageImport {
             val reference = concat(samples, plan.reference)
             val refReport = OfflineQualityGuard.referenceReport(context, reference)
             if (!refReport.trusted)
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + refReport.diagLine() + "stage=reference-guard")
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.GUARD_REJECTED, dir, diag.toString() + refReport.diagLine() + "stage=reference-guard" + suggestWindow(context, samples, windows, duration, embedsDenoised, cancelled))
 
             // ---- extraction (existing, blocking <= 180 s, no cancel param)
             onProgress(FootageStage.EXTRACT, 0f)
@@ -244,6 +247,25 @@ object OfflineFootageImport {
         } finally {
             if (!keep) dir.deleteRecursively()
         }
+    }
+
+    /** "; try a-b s ..." for a refused tap, from the SAME planner and reference guard (no thresholds changed). Never throws; empty if it cannot run. */
+    private fun suggestWindow(
+        context: Context, samples: FloatArray, windows: List<WindowEmbedding>?, duration: Float, denoisedProfile: Boolean, cancelled: () -> Boolean
+    ): String {
+        if (windows == null || windows.isEmpty()) return ""
+        return try {
+            val found = WindowSuggester.suggest(
+                windows, duration,
+                if (denoisedProfile) OfflineFootagePlanner.MergeProfile.DENOISED else OfflineFootagePlanner.MergeProfile.RAW,
+                referencePasses = { a, b ->
+                    val i0 = (a * 16000).toInt().coerceIn(0, samples.size); val i1 = (b * 16000).toInt().coerceIn(i0, samples.size)
+                    OfflineQualityGuard.referenceReport(context, samples.copyOfRange(i0, i1)).trusted
+                },
+                isCancelled = cancelled)
+            "; " + WindowSuggester.note(found)
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Throwable) { android.util.Log.w("OfflineFootage", "window suggestion failed: " + e.message); "" }
     }
 
     /** Abstain/gate-failure policy: tap given -> unchanged exp-10 path (own guards + "Original kept" fallback); no tap -> ask for a tap. */
