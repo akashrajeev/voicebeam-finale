@@ -43,7 +43,8 @@ object OfflineVideoImport {
             val clean=File(dir,"clean.wav")
             var fallback: String? = null
             val speech=OfflineSpeechMask.compute(context,samples)
-            if(!OfflineQualityGuard.reference(context,reference)) fallback="Reference quality check failed; choose 2-10 seconds of clear target-only speech"
+            val refReport=OfflineQualityGuard.referenceReport(context,reference)
+            if(!refReport.trusted) fallback=refReport.userMessage()
             else {
                 OfflineSpeakerBeam.extract(context,raw,reference,clean)
                 val extracted=WavWriter.read(clean).first
