@@ -11,14 +11,14 @@ sealed class FaceProposalResult {
     class Failed(val reason: String) : FaceProposalResult()
 
     companion object {
-        const val NO_WINDOW_TEXT = "No 3-10 second moment found where only this person speaks. Type one below."
+        const val NO_WINDOW_TEXT = "No 3-10 second moment found where only this person speaks. Use the enrolled voice if you have one, or type a window under Advanced below."
         const val FOUND_TEXT = "Found a suggested moment. Check it, then confirm."
 
         fun failedText(reason: String): String {
             val r = reason.trim().ifEmpty { "unknown error" }
             return if (r.contains("No audio track found", ignoreCase = true) || r.contains("Choose a video with an audio track", ignoreCase = true))
-                "Couldn't read any audio from this video (it may have no sound track, e.g. a muted or GIF-converted share). Type a moment below, or choose the original file."
-            else "Couldn't read this video's audio to suggest a moment: $r. Type one below."
+                "Couldn't read any audio from this video (it may have no sound track, e.g. a muted or GIF-converted share). Choose the original file, or type a window under Advanced below."
+            else "Couldn't read this video's audio to suggest a moment: $r. You can type a window under Advanced below."
         }
 
         fun userText(r: FaceProposalResult): String = when (r) {
