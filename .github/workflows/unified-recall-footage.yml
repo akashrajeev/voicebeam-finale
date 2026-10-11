@@ -1,9 +1,9 @@
 name: Unified Recall and footage port validation
 # Targeted Listen gate tuning with Recall denoiser retained
-# Re-run trigger: phone APK SHA256 print + installer artifact (unified build + pass7_29 plan-stage diagnostics)
+# AV-TSE branch build: kit compile check + benchmark receiver
 on:
   push:
-    branches: [unified-2026-10-11]
+    branches: [unified-2026-10-11, avtse-2026-10-11]
     paths: ['.github/workflows/unified-recall-footage.yml']
   workflow_dispatch:
 permissions:
