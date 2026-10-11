@@ -5,7 +5,7 @@ import android.content.Context
 data class Settings(
     val strictFocus: Boolean = true,
     val strictFull: Boolean = true,
-    val strictResidual: Float = .2f,
+    val strictResidual: Float = .10f,
     val strictHangoverMs: Float = 700f,
     val targetMatchThreshold: Float = .8f,
     val matcherDenoised: Boolean = false,
@@ -31,7 +31,7 @@ class SettingsStore(context: Context) {
     fun load(): Settings = Settings(
         strictFocus = p.getBoolean("strictFocus", true),
         strictFull = p.getBoolean("strictFull", true),
-        strictResidual = p.getFloat("strictResidual", .2f),
+        strictResidual = p.getFloat("strictResidual", .10f),
         strictHangoverMs = p.getFloat("strictHangoverMs", 700f),
         targetMatchThreshold = p.getFloat("targetMatchThreshold", .8f),
         matcherDenoised = p.getBoolean("matcherDenoised", false),
