@@ -37,7 +37,7 @@ class AudioPipeline(
     private val onError: (Throwable) -> Unit = {},
     private val onFrame: (FrameInfo) -> Unit,
 ) {
-    data class FrameInfo(val level: Float, val gain: Float, val probability: Float, val voiceActive: Boolean, val monitorRoute: String?)
+    data class FrameInfo(val level: Float, val gain: Float, val probability: Float, val voiceActive: Boolean, val monitorRoute: String?, val gateState: String = "")
     data class CaptionBlock(val samples: FloatArray, val captureMs: Long, val probability: Float, val voiceActive: Boolean)
     private var capturedSamples = 0L
     val droppedCaptionBlocks: Long get() = asrQueue.dropped
@@ -368,7 +368,7 @@ class AudioPipeline(
                 com.akashrajeev.voicebeam.core.SpeechObservation.enqueue(
                     observation, if(matcherDenoised) denoised.copyOf(n) else input, voiceQueue)
                 onFrame(FrameInfo(sqrt(e / n), g, gate.probability, voice,
-                    routed?.productName?.toString().takeIf { headphoneRoute }))
+                    routed?.productName?.toString().takeIf { headphoneRoute }, gate.state.toString()))
                 if (com.akashrajeev.voicebeam.BuildConfig.DEBUG && ++dbgFrames % 400 == 0L) {
                     var er = 0f; for (k in 0 until input.size) er += input[k] * input[k]
                     Log.i("VoiceBeamAudio", "audiodbg dbg=" + (dbg != null) + " in=" + kotlin.math.sqrt(er / input.size) + " clean=" + kotlin.math.sqrt(e / n) + " g=" + g + " route=" + routed?.type + " written=" + written + " monitor=" + writeSpeech)
