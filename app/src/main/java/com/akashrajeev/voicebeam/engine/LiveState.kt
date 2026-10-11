@@ -30,6 +30,7 @@ data class LiveState(
     val lockedSpeaking: Float = 0f,
     val targetProbability: Float = 1f,
     val gain: Float = 1f,
+    val gateState: String = "",
     val voiceLearned: Boolean = false,
     val voiceEnrollmentActive: Boolean = false,
     val voiceEnrollmentProgress: Float = 0f,
