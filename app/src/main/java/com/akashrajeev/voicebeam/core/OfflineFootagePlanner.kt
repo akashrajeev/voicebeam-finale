@@ -10,7 +10,7 @@ sealed class PlanResult {
         val labels: List<FootageAnalysis.Seg>, val purity: List<Float>
     ) : PlanResult()
     /** Abstain never means "return degraded output": the caller falls back to the existing extractor path or asks for a tap. */
-    class Abstain(val reason: AbstainReason) : PlanResult()
+    class Abstain(val reason: AbstainReason, val detail: String = "") : PlanResult()
 }
 
 /** Pure decision logic: windows (+ optional tap interval, lip series) -> Plan or Abstain. No audio, no ORT, no Android. */
@@ -56,20 +56,24 @@ object OfflineFootagePlanner {
             val clusters = ca.windowClusters()
             val inside = ws.indices.filter { ws[it].startSec >= tap.startSec && ws[it].endSec <= tap.endSec }
             val valid = inside.filter { clusters[it] >= 0 }
-            if (inside.size < MIN_TAP_WINDOWS || valid.size < MIN_TAP_WINDOWS) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
+            val tapDesc = "tap %.1f-%.1fs, clusters=${ca.clusterCount}, tap windows=${inside.size}, in a cluster=${valid.size}".format(tap.startSec, tap.endSec)
+            if (inside.size < MIN_TAP_WINDOWS || valid.size < MIN_TAP_WINDOWS) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER, "$tapDesc; check=too few tap windows in any cluster (need $MIN_TAP_WINDOWS)")
             val counts = valid.groupingBy { clusters[it] }.eachCount()
             val ranked = counts.entries.sortedByDescending { it.value }
             val best = ranked[0]
             val runnerUp = if (ranked.size > 1) ranked[1].value else 0
-            if ((best.value - runnerUp).toFloat() / inside.size < MIN_TAP_MARGIN) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
-            if (best.value.toFloat() / inside.size < MIN_TAP_SHARE) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER)
+            val margin = (best.value - runnerUp).toFloat() / inside.size
+            val share = best.value.toFloat() / inside.size
+            val tapStats = "$tapDesc, best cluster=${best.value} windows, runner-up=$runnerUp, share=%.2f, margin=%.2f".format(share, margin)
+            if (margin < MIN_TAP_MARGIN) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER, "$tapStats; check=margin ${"%.2f".format(margin)} < $MIN_TAP_MARGIN (tap spans two clusters)")
+            if (share < MIN_TAP_SHARE) return PlanResult.Abstain(AbstainReason.TAP_NOT_IN_CLUSTER, "$tapStats; check=share ${"%.2f".format(share)} < $MIN_TAP_SHARE")
             // Routed render needs other speakers to separate from; one cluster gives no such evidence.
-            if (ca.clusterCount < 2) return PlanResult.Abstain(AbstainReason.SINGLE_CLUSTER)
+            if (ca.clusterCount < 2) return PlanResult.Abstain(AbstainReason.SINGLE_CLUSTER, "clusters=${ca.clusterCount}")
             val base = roles(ws, durationSec, tap, profile.pin)
             for (pm in profile.perturb) {
                 val r = roles(ws, durationSec, tap, pm)
                 val agree = if (base == null || r == null) 0f else base.indices.count { base[it] == r[it] }.toFloat() / base.size
-                if (agree < MIN_PLAN_STABILITY) return PlanResult.Abstain(AbstainReason.PLAN_UNSTABLE)
+                if (agree < MIN_PLAN_STABILITY) return PlanResult.Abstain(AbstainReason.PLAN_UNSTABLE, "role agreement %.2f < $MIN_PLAN_STABILITY at merge cosine $pm".format(agree))
             }
             return finish(if (rawEmbed != null) ca.withAbstainedAttached(best.key, rawEmbed) else ca, best.key, TargetSource.TAP, listOf(tap))
         }
