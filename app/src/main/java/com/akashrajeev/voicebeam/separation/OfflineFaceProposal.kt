@@ -3,6 +3,7 @@ package com.akashrajeev.voicebeam.separation
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.akashrajeev.voicebeam.core.FaceProposalResult
 import com.akashrajeev.voicebeam.core.FootageAnalysis
 import com.akashrajeev.voicebeam.core.TapProposal
 import com.akashrajeev.voicebeam.vision.OfflineFaceFeed
@@ -20,8 +21,8 @@ import kotlinx.coroutines.withContext
 object OfflineFaceProposal {
 
     /**
-     * Proposal for [targetId] (from FaceTrackBinner.idAt), or null when nothing
-     * qualifies or any stage fails - the panel then asks for a typed moment.
+     * Proposal for [targetId] (from FaceTrackBinner.idAt): Found, NoWindow (everything was read, nothing qualifies) or Failed(reason) (decode/VAD/IO error).
+     * The panel shows a different message for each; a failure is never reported as "no solo moment".
      */
     suspend fun compute(
         context: Context,
@@ -29,7 +30,7 @@ object OfflineFaceProposal {
         feed: OfflineFaceFeed.Result,
         targetId: Int,
         isCancelled: () -> Boolean = { false }
-    ): TapProposal.Proposal? = withContext(Dispatchers.IO) {
+    ): FaceProposalResult = withContext(Dispatchers.IO) {
         val tmp = File(context.cacheDir, "face-proposal-${System.nanoTime()}.mp4")
         try {
             context.contentResolver.openInputStream(uri).use { input ->
@@ -46,11 +47,12 @@ object OfflineFaceProposal {
             val series = feed.binner.series(targetId)
             val lip = series.targetLipOn.copyOf(bins)          // grown bins: false = not talking (conservative)
             val others = series.othersOff?.copyOf(bins)        // grown bins: false = other not proven silent (conservative)
-            TapProposal.propose(lip, others, speech, durationSec)
+            val p = TapProposal.propose(lip, others, speech, durationSec)
+            if (p == null) FaceProposalResult.NoWindow else FaceProposalResult.Found(p)
         } catch (t: Throwable) {
             if (t is kotlinx.coroutines.CancellationException) throw t
             Log.w("OfflineFootage", "face proposal failed", t)
-            null
+            FaceProposalResult.Failed(t.message ?: t.javaClass.simpleName)
         } finally {
             tmp.delete()
         }
