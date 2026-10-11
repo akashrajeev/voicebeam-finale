@@ -60,7 +60,9 @@ object OfflineFootageImport {
         /** Render the target bins from the DENOISED audio (level-matched, gate-checked, falls back to the mixture with a report line). Needs the denoiser to have run. */
         denoiseRender: Boolean = true,
         /** Face-tap target: given the audio-plan labels, per-0.5 s "target face tracked" flags (FaceTrackBinner.visibleWithAliases). Null (typed reference) = audio-only labels. */
-        faceVisibility: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? = null
+        faceVisibility: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? = null,
+        /** Voice template from Listen's learn-locked-voice. Tried FIRST as the reference; if it cannot be matched confidently the tap (when given) is the fallback. */
+        enrolled: FloatArray? = null
     ): FootageResult = withContext(Dispatchers.IO) {
         val job = coroutineContext[Job]
         val cancelled = { job?.isActive == false }
@@ -132,9 +134,15 @@ object OfflineFootageImport {
             val rawEmbedArg: ((Int) -> FloatArray?)? = if (embedsDenoised && rawWindows != null) rawEmbedAt else null
             val plan = try {
                 if (windows == null || windows.isEmpty()) PlanResult.Abstain(AbstainReason.NO_CLUSTER)
-                else OfflineFootagePlanner.plan(windows, duration, tap = tap,
-                    profile = if (embedsDenoised) OfflineFootagePlanner.MergeProfile.DENOISED else OfflineFootagePlanner.MergeProfile.RAW,
-                    rawEmbed = rawEmbedArg)
+                else {
+                    val prof = if (embedsDenoised) OfflineFootagePlanner.MergeProfile.DENOISED else OfflineFootagePlanner.MergeProfile.RAW
+                    val ep = if (enrolled != null) OfflineFootagePlanner.planEnrolled(windows, duration, enrolled, prof) else null
+                    if (ep is PlanResult.Plan) { diag.append("reference=enrolled voice; "); ep }
+                    else {
+                        if (ep is PlanResult.Abstain) diag.append("enrolled voice not usable (${ep.reason}${if (ep.detail.isEmpty()) "" else ": " + ep.detail}); " + (if (tap != null) "falling back to the tap; " else ""))
+                        OfflineFootagePlanner.plan(windows, duration, tap = tap, profile = prof, rawEmbed = rawEmbedArg)
+                    }
+                }
             } finally { try { rawVp?.release() } catch (_: Throwable) {} }
 
             if (plan is PlanResult.Abstain) {
