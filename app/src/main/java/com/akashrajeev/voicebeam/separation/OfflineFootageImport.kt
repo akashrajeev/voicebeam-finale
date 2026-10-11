@@ -172,20 +172,32 @@ object OfflineFootageImport {
             // render attempts, best first: denoised target bins (level-matched) -> denoised as-is -> the original mixture. Each attempt runs the SAME output gates and the
             // SAME speaker guard on the final audio; nothing is relaxed. A denoised attempt that fails either one drops to the next, and the report says why.
             val den = if (denoiseRender) denoised else null
+            // No makeup-gain attempt: gain applied before the output gates pushes speech frames over the band cap (measured: +1.8 dB -> 183 frames over, +2.2 dB -> 314),
+            // so it could never pass; the speech-level gain runs AFTER the gates (Loudness) and already restores the level.
             val attempts = ArrayList<Pair<String, FloatArray?>>()
-            if (den != null) {
-                val gn = SilenceRender.makeupGain(samples, den, speech)
-                if (gn > 1f) attempts.add("denoised, level +${"%.1f".format(20 * Math.log10(gn.toDouble()))} dB" to SilenceRender.scale(den, gn))
-                attempts.add("denoised" to den)
-            }
-            attempts.add((if (denoiseRender && den == null) "mixture (denoiser did not run)" else if (denoiseRender) "mixture (denoised render rejected: see log)" else "mixture (denoise render off)") to null)
+            if (den != null) attempts.add("denoised" to den)
+            attempts.add((if (denoiseRender && den == null) "mixture (denoiser did not run)" else if (denoiseRender) "mixture (denoised render rejected: REASONS)" else "mixture (denoise render off)") to null)
             var outcome: RenderOutcome.Rendered? = null
             var renderNote = ""
+            val rejected = ArrayList<String>()
+            // Speaker guard for a denoised attempt runs in the denoised domain (denoised reference, denoised source baseline): the raw-domain comparison
+            // loses 0.12-0.18 mean cosine for the SAME speaker (measured), which can trip the unchanged thresholds on noisy references.
+            val denRef = if (den != null) concat(den, plan.reference) else null
             for ((name, d) in attempts) {
                 coroutineContext.ensureActive()
                 val o = FootageRenderPipeline.run(samples, extracted, d, labels, speech, silenceMode = silenceMode, normalizeLoudness = true)
-                if (o !is RenderOutcome.Rendered) { android.util.Log.w("OfflineFootage", "render attempt '$name' rejected by gates: ${(o as RenderOutcome.Rejected).gates.failures}"); continue }
-                if (!OfflineFootageGuard.output(context, samples, o.audio, reference, speech, labels)) { android.util.Log.w("OfflineFootage", "render attempt '$name' rejected by speaker guard"); continue }
+                if (o !is RenderOutcome.Rendered) {
+                    val why = (o as RenderOutcome.Rejected).gates.failures
+                    android.util.Log.w("OfflineFootage", "render attempt '$name' rejected by gates: $why")
+                    rejected.add("$name: gates ${why.joinToString(", ")}"); continue
+                }
+                val detail = StringBuilder()
+                val guardOk = if (d != null && denRef != null) OfflineFootageGuard.output(context, d, o.audio, denRef, speech, labels, detail)
+                              else OfflineFootageGuard.output(context, samples, o.audio, reference, speech, labels, detail)
+                if (!guardOk) {
+                    android.util.Log.w("OfflineFootage", "render attempt '$name' rejected by speaker guard: $detail")
+                    rejected.add("$name: speaker guard $detail"); continue
+                }
                 outcome = o; renderNote = name; break
             }
             denoised = null
@@ -209,7 +221,7 @@ object OfflineFootageImport {
                 appendLine("Embeddings: ${if (embedsDenoised) "denoised (pin 0.41)" else "raw (pin 0.45)"}")
                 appendLine("Final 0.5 s bin labels (T=target only, O=other only, V=overlap, N=none): " + labels.joinToString("") { when (it) { FootageAnalysis.Seg.TARGET_ONLY -> "T"; FootageAnalysis.Seg.OTHER_ONLY -> "O"; FootageAnalysis.Seg.OVERLAP -> "V"; FootageAnalysis.Seg.NONE -> "N" } })
                 appendLine("Silence mode: ${if (silenceMode == SilenceMode.HARD_MUTE) "HARD_MUTE (non-target and empty bins are silent)" else "FLOOR (non-target ducked)"}")
-                appendLine("Noise suppression: $renderNote")
+                appendLine("Noise suppression: ${renderNote.replace("REASONS", rejected.joinToString("; ").ifEmpty { "n/a" })}")
                 appendLine("Mute edges moved to speech pauses: ${chosen.snappedEdges}; speech-level gain: ${"%.1f".format(chosen.gainDb)} dB")
                 appendLine("Face gate: $faceNote")
                 appendLine("Heuristic checks, not a quality certification. Isolation quality is not guaranteed.")
@@ -261,11 +273,12 @@ object OfflineFootageImport {
 object OfflineFootageGuard {
     fun output(
         context: Context, source: FloatArray, finalAudio: FloatArray, ref: FloatArray,
-        speech: BooleanArray, labels: Array<FootageAnalysis.Seg>
+        speech: BooleanArray, labels: Array<FootageAnalysis.Seg>, detail: StringBuilder? = null
     ): Boolean {
         val embed = VoicePrint(context.assets)
         try {
-            val r = embed.embed(ref) ?: return false
+            val r = embed.embed(ref)
+            if (r == null) { detail?.append("reference could not be embedded"); return false }
             val srcScores = ArrayList<Float>(); val outScores = ArrayList<Float>(); val targetScores = ArrayList<Float>()
             for (a in source.indices step 48000) {
                 val b = minOf(a + 48000, source.size)
@@ -277,8 +290,9 @@ object OfflineFootageGuard {
                 srcScores.add(VoiceMatch.cosine(s, r)); outScores.add(yc)
                 if (FinalAudioGuardMath.targetChunkQualifies(labels, speech, a, b)) targetScores.add(yc)
             }
-            if (outScores.isEmpty()) return false
+            if (outScores.isEmpty()) { detail?.append("no chunk qualified"); return false }
             android.util.Log.i("OfflineFootageGuard", "sourceCosine=${srcScores.average()} outputCosine=${outScores.average()} chunks=${outScores.size} chunkScores=$outScores")
+            detail?.append("(source cos %.2f, output cos %.2f, %d chunks, %d weak target chunks)".format(srcScores.average(), outScores.average(), outScores.size, targetScores.count { !it.isFinite() || it < FinalAudioGuardMath.TARGET_CHUNK_FLOOR }))
             // Routed renders get NO per-chunk floor: legitimately ducked other-speaker chunks score ~0 vs the target reference. Bad plans are caught by PLAN_UNSTABLE.
             // Target-region floor (see FinalAudioGuardMath): a wrongly ducked target fragment must not hide inside the mean.
             return FinalAudioGuardMath.pass(srcScores.average().toFloat(), outScores.average().toFloat(), outScores.size) &&
