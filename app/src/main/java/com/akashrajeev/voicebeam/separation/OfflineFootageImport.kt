@@ -3,6 +3,7 @@ package com.akashrajeev.voicebeam.separation
 import android.content.Context
 import android.net.Uri
 import com.akashrajeev.voicebeam.core.AbstainReason
+import com.akashrajeev.voicebeam.core.BandLimiter
 import com.akashrajeev.voicebeam.core.FaceVisibilityGate
 import com.akashrajeev.voicebeam.core.FinalAudioGuardMath
 import com.akashrajeev.voicebeam.core.SilenceMode
@@ -171,7 +172,12 @@ object OfflineFootageImport {
             }
             // render attempts, best first: denoised target bins (level-matched) -> denoised as-is -> the original mixture. Each attempt runs the SAME output gates and the
             // SAME speaker guard on the final audio; nothing is relaxed. A denoised attempt that fails either one drops to the next, and the report says why.
-            val den = if (denoiseRender) denoised else null
+            val limiterNote = StringBuilder()
+            val den = if (denoiseRender) denoised?.let { d0 ->
+                val lr = BandLimiter.limit(samples, d0)
+                limiterNote.append("band limiter scaled ${lr.limitedFrames} of ${lr.totalFrames} frames; ")
+                lr.audio
+            } else null
             // No makeup-gain attempt: gain applied before the output gates pushes speech frames over the band cap (measured: +1.8 dB -> 183 frames over, +2.2 dB -> 314),
             // so it could never pass; the speech-level gain runs AFTER the gates (Loudness) and already restores the level.
             val attempts = ArrayList<Pair<String, FloatArray?>>()
@@ -221,7 +227,7 @@ object OfflineFootageImport {
                 appendLine("Embeddings: ${if (embedsDenoised) "denoised (pin 0.41)" else "raw (pin 0.45)"}")
                 appendLine("Final 0.5 s bin labels (T=target only, O=other only, V=overlap, N=none): " + labels.joinToString("") { when (it) { FootageAnalysis.Seg.TARGET_ONLY -> "T"; FootageAnalysis.Seg.OTHER_ONLY -> "O"; FootageAnalysis.Seg.OVERLAP -> "V"; FootageAnalysis.Seg.NONE -> "N" } })
                 appendLine("Silence mode: ${if (silenceMode == SilenceMode.HARD_MUTE) "HARD_MUTE (non-target and empty bins are silent)" else "FLOOR (non-target ducked)"}")
-                appendLine("Noise suppression: ${renderNote.replace("REASONS", rejected.joinToString("; ").ifEmpty { "n/a" })}")
+                appendLine("Noise suppression: ${limiterNote}${renderNote.replace("REASONS", rejected.joinToString("; ").ifEmpty { "n/a" })}")
                 appendLine("Mute edges moved to speech pauses: ${chosen.snappedEdges}; speech-level gain: ${"%.1f".format(chosen.gainDb)} dB")
                 appendLine("Face gate: $faceNote")
                 appendLine("Heuristic checks, not a quality certification. Isolation quality is not guaranteed.")
