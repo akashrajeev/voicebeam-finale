@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.akashrajeev.voicebeam.core.AbstainReason
 import com.akashrajeev.voicebeam.core.BandLimiter
+import com.akashrajeev.voicebeam.core.FaceVoiceCheck
 import com.akashrajeev.voicebeam.core.WindowEmbedding
 import com.akashrajeev.voicebeam.core.WindowSuggester
 import com.akashrajeev.voicebeam.core.FaceVisibilityGate
@@ -186,7 +187,13 @@ object OfflineFootageImport {
             }
             // lip-sync gate: target lips not moving -> not the target talking -> muted. Distrusted (labels unchanged) when it would mute most of the target.
             val lipOn = try { lipSeries?.invoke() } catch (e: Exception) { faceNote += "; lip series failed (${e.javaClass.simpleName})"; null }
-            val lipGate = LipSyncGate.relabel(labelsFace, lipOn)
+            // face/voice cross-check: tapped lips move but the chosen voice is absent -> voice and face are probably different people: abstain, never isolate the wrong person
+            val xc = FaceVoiceCheck.crossCheck(labelsFace, lipOn)
+            if (xc is FaceVoiceCheck.Check.Mismatch)
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, AbstainReason.EVIDENCE_CONTRADICTS_PLAN, dir, diag.toString() + "stage=face-voice-check; the tapped face's lips move but the locked voice is not there (" + xc.note + ")")
+            val filled = FaceVoiceCheck.fillGaps(labelsFace, lipOn)
+            faceNote += "; face/voice check: " + (xc as FaceVoiceCheck.Check.Ok).note + "; gap fill: ${filled.bins} bins"
+            val lipGate = LipSyncGate.relabel(filled.labels, lipOn)
             val labels: Array<FootageAnalysis.Seg> = when (lipGate) {
                 is LipSyncGate.Result.Relabeled -> { faceNote += "; lip gate muted ${lipGate.mutedBins} of ${lipGate.mutedBins + lipGate.keptBins} target bins (lips not moving)"; lipGate.labels }
                 is LipSyncGate.Result.Unchanged -> { if (lipSeries != null && lipOn != null) faceNote += "; lip gate: ${lipGate.reason}"; lipGate.labels }
