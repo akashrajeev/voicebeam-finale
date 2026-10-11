@@ -29,6 +29,8 @@ object TapProposal {
             if (e - a < binLen / 2 || (e + 511) / 512 > speech.size) 0f else FootageWindows.speechCoverage(speech, a, e)
         }
         val ok = BooleanArray(bins) { targetLipOn[it] && share[it] >= MIN_BIN_SPEECH && (othersOff?.get(it) ?: true) }
+        // bridge single failed bins between two good ones (a dropped lip frame or one noisy bin must not split a long solo stretch)
+        for (b in 1 until bins - 1) if (!ok[b] && ok[b - 1] && ok[b + 1] && (targetLipOn[b] || share[b] >= MIN_BIN_SPEECH)) ok[b] = true
         val minBins = Math.ceil((MIN_SEC / FootageAnalysis.BIN_SEC).toDouble()).toInt()
         val maxBins = (MAX_SEC / FootageAnalysis.BIN_SEC).toInt()
         var best: IntArray? = null; var bestScore = -1f
