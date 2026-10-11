@@ -96,6 +96,25 @@ fun OfflineVideoPanel(
     val eff = faceProposal ?: proposal
     fun resetFace() { scanJob?.cancel(); proposeJob?.cancel(); scanning=false; proposing=false; feed=null; faceNote=""; preview=null; previewSec=0f; sliderSec=0f; tapId=null; faceProposal=null }
     fun closeDialog() { resetFace(); uri=null }
+    fun startRun(src: Uri, a: Double?, b: Double?, enr: FloatArray?) {
+        scanJob?.cancel(); scanning=false
+        val fd=feed; val tid=tapId
+        val faceVis: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? =
+            if(fd!=null && tid!=null) { labels -> fd.binner.visibleWithAliases(tid,labels).visible } else null
+        val lipSer: (() -> BooleanArray?)? = if(fd!=null && tid!=null) { { fd.binner.series(tid).targetLipOn } } else null
+        busy=true; result=""
+        importJob=scope.launch {
+            try {
+                when(val r=OfflineFootageImport.run(context,src,a,b,faceVisibility=faceVis,enrolled=enr,lipSeries=lipSer)) {
+                    is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else footageDiag(r.meta.dir); onImported() }
+                    is FootageResult.NeedsTap -> result="Original kept unchanged. Couldn't lock this person's voice from the video (" + r.reason.name + ")."
+                }
+            }
+            catch(e:CancellationException) { throw e }
+            catch(e:Exception) { result=e.message ?: "Import failed; original unchanged" }
+            finally { busy=false }
+        }
+    }
     LaunchedEffect(allowed) {
         if(!allowed) { scanJob?.cancel(); proposeJob?.cancel(); scanning=false; proposing=false }
         if(!allowed && busy) { importJob?.cancel(); result="Import cancelled because recording or local processing started. Original unchanged." }
@@ -148,7 +167,7 @@ fun OfflineVideoPanel(
             onDismissRequest={ if(!busy) closeDialog() },
             title={ Text("Target-alone reference") },
             text={ Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                Text("Watch your original video first. Enter start/end seconds containing only the target voice, no other speaker. Use at least 3 seconds when possible. Short or inconsistent references and damaged extraction keep the original unchanged. Cannot isolate from a face alone. Quality varies, especially overlapping similar voices.")
+                Text("Tap the person you want to keep. Isolation starts automatically and everyone else is turned down. Quality varies, especially with overlapping similar voices.")
                 if(scanning) { CircularProgressIndicator(); Text(faceNote) }
                 else if(faceNote.isNotBlank()) Text(faceNote)
                 val fd=feed; val bmp=preview
@@ -170,6 +189,10 @@ fun OfflineVideoPanel(
                                             val r=OfflineFaceProposal.compute(context,it,fd,id,isCancelled={ !isActive })
                                             faceProposal=(r as? FaceProposalResult.Found)?.proposal
                                             faceNote=FaceProposalResult.userText(r)
+                                            val fp=(r as? FaceProposalResult.Found)?.proposal
+                                            val enr=com.akashrajeev.voicebeam.engine.EnrolledVoiceStore.load(context)
+                                            if(fp!=null) { faceNote="Isolating this person..."; proposing=false; startRun(it,fp.interval.startSec.toDouble(),fp.interval.endSec.toDouble(),null) }
+                                            else if(enr!=null) { faceNote="No clean solo moment for this face. Using your enrolled voice..."; proposing=false; startRun(it,null,null,enr) }
                                         } catch(e:CancellationException) { throw e }
                                         catch(e:Throwable) { faceNote=FaceProposalResult.failedText(e.message ?: e.javaClass.simpleName) }
                                         finally { proposing=false }
@@ -194,69 +217,10 @@ fun OfflineVideoPanel(
                     Text("Preview at ${"%.1f".format(previewSec)} s",color=Muted,style=MaterialTheme.typography.bodySmall)
                 }
                 if(proposing) CircularProgressIndicator()
-                if(eff!=null && !usedProposal) {
-                    Text(FootageUiText.SUGGESTED_TAP_HINT)
-                    TextButton(onClick={ usedProposal=true; confirmed=false; start="%.1f".format(eff.interval.startSec); end="%.1f".format(eff.interval.endSec) },enabled=!busy,modifier=Modifier.testTag("useSuggestedMoment")) { Text("Use suggested moment ${"%.1f".format(eff.interval.startSec)}-${"%.1f".format(eff.interval.endSec)} s") }
-                }
-                OutlinedTextField(start,{start=it; usedProposal=false},label={Text("Start seconds")},enabled=!busy,singleLine=true,modifier=Modifier.testTag("referenceStart"))
-                OutlinedTextField(end,{end=it; usedProposal=false},label={Text("End seconds")},enabled=!busy,singleLine=true,modifier=Modifier.testTag("referenceEnd"))
-                if(usedProposal) {
-                    Text(tap.message)
-                    Row { Checkbox(confirmed,{confirmed=it},enabled=!busy,modifier=Modifier.testTag("confirmSuggestedMoment")); Text("I checked this moment: only my target speaks") }
-                } else if(!tap.canStart) Text(tap.message)
-                val enrolledTpl=remember { com.akashrajeev.voicebeam.engine.EnrolledVoiceStore.load(context) }
-                if(enrolledTpl!=null) {
-                    Text("Voice learned in Listen is saved on this phone. Use it as the reference (no clean solo moment needed). A typed moment is only the fallback.",color=Muted,style=MaterialTheme.typography.bodySmall)
-                    Button(onClick={
-                        val a0=start.toDoubleOrNull(); val b0=end.toDoubleOrNull()
-                        val tapOk=a0!=null && b0!=null && a0.isFinite() && b0.isFinite() && a0>=0 && b0-a0 in 3.0..10.0 && (!usedProposal || confirmed)
-                        scanJob?.cancel(); proposeJob?.cancel(); scanning=false; proposing=false
-                        val fd=feed; val tid=tapId
-                        val faceVis: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? =
-                            if(fd!=null && tid!=null) { labels -> fd.binner.visibleWithAliases(tid,labels).visible } else null
-                    val lipSer: (() -> BooleanArray?)? = if(fd!=null && tid!=null) { { fd.binner.series(tid).targetLipOn } } else null
-                        busy=true; result=""
-                        importJob=scope.launch {
-                            try {
-                                when(val r=OfflineFootageImport.run(context,it,if(tapOk) a0 else null,if(tapOk) b0 else null,faceVisibility=faceVis,enrolled=enrolledTpl,lipSeries=lipSer)) {
-                                    is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else footageDiag(r.meta.dir); onImported() }
-                                    is FootageResult.NeedsTap -> result="Original kept unchanged. The enrolled voice was not confidently found in this clip (" + r.reason.name + "). Type a 3-10 second moment where only the target speaks and use Isolate offline."
-                                }
-                            }
-                            catch(e:CancellationException) { throw e }
-                            catch(e:Exception) { result=e.message ?: "Import failed; original unchanged" }
-                            finally { busy=false }
-                        }
-                    },enabled=!busy && !scanning && !proposing && allowed,modifier=Modifier.testTag("runEnrolledIsolation")) { Text("Isolate with enrolled voice") }
-                }
                 if(busy) { CircularProgressIndicator(); Text("Working locally. Up to 3 minutes. Keep this screen open.") }
                 if(result.isNotBlank()) Text(result)
             } },
-            confirmButton={ TextButton(onClick={
-                val a=start.toDoubleOrNull(); val b=end.toDoubleOrNull()
-                val ok=tap.canStart
-                if(a==null || b==null || !a.isFinite() || !b.isFinite() || a<0 || b-a !in 3.0..10.0 || !ok) { result=if(usedProposal && !confirmed) "Confirm the suggested moment first, or type your own." else if(tap.message.isNotBlank() && !tap.canStart && !usedProposal) tap.message else "Choose a valid 3-10 second reference" }
-                else {
-                    scanJob?.cancel(); proposeJob?.cancel(); scanning=false; proposing=false
-                    // only a face-tap target gets face gating; a typed reference stays audio-only
-                    val fd=feed; val tid=tapId
-                    val faceVis: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? =
-                        if(fd!=null && tid!=null) { labels -> fd.binner.visibleWithAliases(tid,labels).visible } else null
-                    val lipSer: (() -> BooleanArray?)? = if(fd!=null && tid!=null) { { fd.binner.series(tid).targetLipOn } } else null
-                    busy=true; result=""
-                    importJob=scope.launch {
-                        try {
-                            when(val r=OfflineFootageImport.run(context,it,a,b,faceVisibility=faceVis,lipSeries=lipSer)) {
-                                is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else footageDiag(r.meta.dir); onImported() }
-                                is FootageResult.NeedsTap -> result="Original kept unchanged. Choose a 3-10 second moment where only the target speaks (" + r.reason.name + ")."
-                            }
-                        }
-                        catch(e:CancellationException) { throw e }
-                        catch(e:Exception) { result=e.message ?: "Import failed; original unchanged" }
-                        finally { busy=false }
-                    }
-                }
-            },enabled=!busy && !scanning && !proposing && allowed && tap.canStart,modifier=Modifier.testTag("runOfflineIsolation")) { Text("Isolate offline") } },
+            confirmButton={},
             dismissButton={ TextButton(onClick={closeDialog()},enabled=!busy) {Text("Cancel")} }
         )
     }
