@@ -135,6 +135,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     val executor = remember { Executors.newSingleThreadExecutor() }
 
     val providerHolder = remember { arrayOfNulls<ProcessCameraProvider>(1) }
+    val cameraHolder = remember { arrayOfNulls<androidx.camera.core.Camera>(1) }
     DisposableEffect(Unit) {
         engine.startListening()
         onDispose {
@@ -168,6 +169,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
             demoFeeder?.start()
             return@LaunchedEffect
         }
+        cameraHolder[0] = null
         val provider = ProcessCameraProvider.getInstance(context).let { f -> kotlinx.coroutines.suspendCancellableCoroutine<ProcessCameraProvider> { c -> f.addListener({ c.resume(f.get()) { } }, ContextCompat.getMainExecutor(context)) } }
         providerHolder[0] = provider
         val selector = if (backCamera) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
@@ -184,15 +186,38 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
             .build().also { a -> analyzer?.let { an -> a.setAnalyzer(executor, an) } }
         provider.unbindAll()
         videoBound = try {
-            provider.bindToLifecycle(lifecycleOwner, selector, preview, analysis, engine.buildVideoCapture())
+            cameraHolder[0] = provider.bindToLifecycle(lifecycleOwner, selector, preview, analysis, engine.buildVideoCapture())
             true
         } catch (t: Throwable) {
             Log.w("VoiceBeamUI", "3 use cases not supported, binding without video", t)
             engine.clearVideoCapture()
             provider.unbindAll()
-            try { provider.bindToLifecycle(lifecycleOwner, selector, preview, analysis) } catch (t2: Throwable) { Log.e("VoiceBeamUI", "camera bind failed", t2) }
+            try { cameraHolder[0] = provider.bindToLifecycle(lifecycleOwner, selector, preview, analysis) } catch (t2: Throwable) { Log.e("VoiceBeamUI", "camera bind failed", t2) }
             false
         }
+    }
+
+    // Two slow torch blinks when consent is captured, so the other person knows. Back camera only.
+    var lastBlinkFor by remember { mutableLongStateOf(state.consentCapturedAtMs) }
+    LaunchedEffect(state.consentCapturedAtMs) {
+        val at = state.consentCapturedAtMs
+        if (at == 0L || at == lastBlinkFor) return@LaunchedEffect
+        lastBlinkFor = at
+        val cam = cameraHolder[0] ?: return@LaunchedEffect
+        if (!backCamera) return@LaunchedEffect
+        try {
+            if (!cam.cameraInfo.hasFlashUnit()) return@LaunchedEffect
+            if (cam.cameraInfo.torchState.value == androidx.camera.core.TorchState.ON) return@LaunchedEffect // torch already in use
+            try {
+                repeat(2) { i ->
+                    cam.cameraControl.enableTorch(true); delay(450)
+                    cam.cameraControl.enableTorch(false)
+                    if (i == 0) delay(450)
+                }
+            } finally {
+                runCatching { cam.cameraControl.enableTorch(false) } // restore: it was off
+            }
+        } catch (t: Throwable) { Log.w("VoiceBeamUI", "consent blink skipped", t) }
     }
 
     // Ticking clock for the REC badge.
