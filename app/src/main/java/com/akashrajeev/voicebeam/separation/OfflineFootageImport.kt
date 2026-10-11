@@ -7,6 +7,7 @@ import com.akashrajeev.voicebeam.core.BandLimiter
 import com.akashrajeev.voicebeam.core.WindowEmbedding
 import com.akashrajeev.voicebeam.core.WindowSuggester
 import com.akashrajeev.voicebeam.core.FaceVisibilityGate
+import com.akashrajeev.voicebeam.core.LipSyncGate
 import com.akashrajeev.voicebeam.core.FinalAudioGuardMath
 import com.akashrajeev.voicebeam.core.SilenceMode
 import com.akashrajeev.voicebeam.core.SilenceRender
@@ -62,7 +63,9 @@ object OfflineFootageImport {
         /** Face-tap target: given the audio-plan labels, per-0.5 s "target face tracked" flags (FaceTrackBinner.visibleWithAliases). Null (typed reference) = audio-only labels. */
         faceVisibility: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? = null,
         /** Voice template from Listen's learn-locked-voice. Tried FIRST as the reference; if it cannot be matched confidently the tap (when given) is the fallback. */
-        enrolled: FloatArray? = null
+        enrolled: FloatArray? = null,
+        /** Face-tap target: per-0.5 s "target lips active" (FaceTrackBinner.series). Bins where the target's lips never move are muted (LipSyncGate). Null = off. */
+        lipSeries: (() -> BooleanArray?)? = null
     ): FootageResult = withContext(Dispatchers.IO) {
         val job = coroutineContext[Job]
         val cancelled = { job?.isActive == false }
@@ -177,9 +180,16 @@ object OfflineFootageImport {
             var faceNote = "not used (no face tap)"
             val faceVis = try { faceVisibility?.invoke(labels0) } catch (e: Exception) { faceNote = "failed (${e.javaClass.simpleName}); audio-only labels"; null }
             val faceGate = FaceVisibilityGate.relabel(labels0, faceVis)
-            val labels: Array<FootageAnalysis.Seg> = when (faceGate) {
+            val labelsFace: Array<FootageAnalysis.Seg> = when (faceGate) {
                 is FaceVisibilityGate.Result.Relabeled -> { faceNote = "muted ${faceGate.mutedBins} of ${faceGate.targetOnlyBins} target bins (face not tracked)"; faceGate.labels }
                 is FaceVisibilityGate.Result.Unchanged -> { if (faceVisibility != null && faceVis != null) faceNote = faceGate.reason; faceGate.labels }
+            }
+            // lip-sync gate: target lips not moving -> not the target talking -> muted. Distrusted (labels unchanged) when it would mute most of the target.
+            val lipOn = try { lipSeries?.invoke() } catch (e: Exception) { faceNote += "; lip series failed (${e.javaClass.simpleName})"; null }
+            val lipGate = LipSyncGate.relabel(labelsFace, lipOn)
+            val labels: Array<FootageAnalysis.Seg> = when (lipGate) {
+                is LipSyncGate.Result.Relabeled -> { faceNote += "; lip gate muted ${lipGate.mutedBins} of ${lipGate.mutedBins + lipGate.keptBins} target bins (lips not moving)"; lipGate.labels }
+                is LipSyncGate.Result.Unchanged -> { if (lipSeries != null && lipOn != null) faceNote += "; lip gate: ${lipGate.reason}"; lipGate.labels }
             }
             // render attempts, best first: denoised target bins (level-matched) -> denoised as-is -> the original mixture. Each attempt runs the SAME output gates and the
             // SAME speaker guard on the final audio; nothing is relaxed. A denoised attempt that fails either one drops to the next, and the report says why.
