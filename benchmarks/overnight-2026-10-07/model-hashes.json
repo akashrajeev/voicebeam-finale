@@ -1,0 +1,127 @@
+[
+  {
+    "file": "silero_vad_v5.onnx",
+    "bytes": 2313101,
+    "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396"
+  },
+  {
+    "file": "nemo_en_titanet_small.onnx",
+    "bytes": 40257283,
+    "sha256": "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e"
+  },
+  {
+    "file": "gtcrn_simple.onnx",
+    "bytes": 535638,
+    "sha256": "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534"
+  },
+  {
+    "file": "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+    "bytes": 29596978,
+    "sha256": "357a834f702b80161e5b981182c038e18553c1f2ca752ed6cec2052365d4129b"
+  },
+  {
+    "file": "3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx",
+    "bytes": 26485263,
+    "sha256": "c59158379255ad66e161679cca6af8d52d51e389e3224ab7d7a7baae295c2db5"
+  },
+  {
+    "file": "wespeaker_en_voxceleb_resnet34.onnx",
+    "bytes": 26534365,
+    "sha256": "5ef208a9da1453335308a6b6f4e6dfbd7e183a38b604de0a57664f45d257fe94"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17/encoder-epoch-99-avg-1.int8.onnx",
+    "bytes": 42845182,
+    "sha256": "3810755ce7c3ab26b42a8bcf39d191308fa27fb0f53358823ba46141d03b7eb3"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17/joiner-epoch-99-avg-1.int8.onnx",
+    "bytes": 259572,
+    "sha256": "e085d73b593cf9b0707f370dbd656d58327d3fe36d80d849202ef81df02cb01e"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17/encoder-epoch-99-avg-1.onnx",
+    "bytes": 88804590,
+    "sha256": "f77a22f4ff94604e1afb2aeb13504d7699363528c047c97d3436087c95c9b659"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17/joiner-epoch-99-avg-1.onnx",
+    "bytes": 1026462,
+    "sha256": "343e17dffa4f386ca206e00d3c406908f68f473c3d35968d6c3cddd5b8559a94"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17/decoder-epoch-99-avg-1.onnx",
+    "bytes": 2092272,
+    "sha256": "45a7f940ecfb53d89fa270ad11b88b961e53a317203eb24b1c8e95ed208b0f30"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17/decoder-epoch-99-avg-1.int8.onnx",
+    "bytes": 539499,
+    "sha256": "21e2a2acd961b3ac72f55be2f10f1a285e1b0b0ba010d7c0b6eab141411b163c"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17/tokens.txt",
+    "bytes": 5048,
+    "sha256": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-2023-06-26/decoder-epoch-99-avg-1-chunk-16-left-128.onnx",
+    "bytes": 2093080,
+    "sha256": "85914f840b71110487ece7a30ebd0bd4b8fb5c2623215bba3aa5ab4c138fc591"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-2023-06-26/encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+    "bytes": 70108816,
+    "sha256": "5022b2eca5b19d1bc104fcf33e26bc32604b7df553cd2e1f62e31dc7b05e9c87"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-2023-06-26/joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+    "bytes": 259416,
+    "sha256": "abd5e30f3f16fc510605c6029dba33f10e4386bd75c5bdc30cf94076864db10d"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-2023-06-26/decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+    "bytes": 540688,
+    "sha256": "780c63ee94c7cfa314211172e5d09b406c0da2beab5c40ea2f54cc95670b76a5"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-2023-06-26/joiner-epoch-99-avg-1-chunk-16-left-128.onnx",
+    "bytes": 1026462,
+    "sha256": "5fe99bb91ea035ab82765f65955b6a9cd2f8b7ebd320761e432d16e432dcaad9"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-2023-06-26/encoder-epoch-99-avg-1-chunk-16-left-128.onnx",
+    "bytes": 260642850,
+    "sha256": "d1d74ba2fd9ce2186662cec93eab9f9c102d97a18e86dafdaf584776c961ab1d"
+  },
+  {
+    "file": "sherpa-onnx-streaming-zipformer-en-2023-06-26/tokens.txt",
+    "bytes": 5048,
+    "sha256": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb"
+  },
+  {
+    "file": "sherpa-onnx-moonshine-tiny-en-int8/preprocess.onnx",
+    "bytes": 6800738,
+    "sha256": "f33addce61a143460fe753b5ee5b7db255e5140b5b779c065b94f6c83ff0bf4e"
+  },
+  {
+    "file": "sherpa-onnx-moonshine-tiny-en-int8/uncached_decode.int8.onnx",
+    "bytes": 53216096,
+    "sha256": "216737000dd5881a17aa043f6bbd286add33e4c3b0ae257153e2ec15438bdc41"
+  },
+  {
+    "file": "sherpa-onnx-moonshine-tiny-en-int8/encode.int8.onnx",
+    "bytes": 18249187,
+    "sha256": "8774dfba578de027ec6595c2c654a0836434489bc963a0db124a7f181f571acb"
+  },
+  {
+    "file": "sherpa-onnx-moonshine-tiny-en-int8/cached_decode.int8.onnx",
+    "bytes": 45264830,
+    "sha256": "2aff28bba6a03d8dcf5c9feac45462629bae37317442299f28115ad09da773f6"
+  },
+  {
+    "file": "sherpa-onnx-moonshine-tiny-en-int8/tokens.txt",
+    "bytes": 436688,
+    "sha256": "1165c2aeb9f72f457a83be2d459a09054f27490acd9b41bd43794dfd25e296ea"
+  }
+]

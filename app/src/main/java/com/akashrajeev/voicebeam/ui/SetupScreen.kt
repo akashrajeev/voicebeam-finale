@@ -48,9 +48,9 @@ fun SetupScreen(engine: VoiceBeamEngine, permsGranted: Boolean, requestPerms: ()
     ) {
         Spacer(Modifier.height(24.dp))
         Text("VoiceBeam", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Text("Tap a face. Follow their voice.", fontSize = 20.sp, color = Accent, fontWeight = FontWeight.SemiBold)
+        Text("Tap a face. Hear only them.", fontSize = 20.sp, color = Accent, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
-        Text("Everything runs on this phone. No internet, nothing uploaded.", color = Muted, fontSize = 14.sp)
+        Text("Everything runs on this phone by default: nothing is uploaded. Cloud captions (Deepgram) are off unless you turn them on in Settings.", color = Muted, fontSize = 14.sp)
         Spacer(Modifier.height(28.dp))
 
         CheckRow(

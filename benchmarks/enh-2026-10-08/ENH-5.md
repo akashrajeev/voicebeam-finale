@@ -1,0 +1,3 @@
+# ENH-5 candidate
+Host sherpa-onnx 1.13.8 reproduced streaming GTCRN warmup: first256 input samples return0, subsequent calls return preceding256. Light previously mixed these with the next raw frame. Corrected with bounded FIFO raw alignment, shared by production and fixture test. Host clean-target half-mix correlation .683 before vs .9982 after; full denoise .9927, raw1.0000. Public4s target; not phone/real-room proof.
+Two unit tests cover warmup, next-frame mismatch, raw/full mix, ring wrap and reset. Retains ENH-4 readability, measured6dB default and ENH-3 normalized raw scoring/enrollment. No SEP or Bluetooth routing edits.

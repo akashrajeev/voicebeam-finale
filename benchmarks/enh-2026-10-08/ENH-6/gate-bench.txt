@@ -1,0 +1,2 @@
+old=true scripted_target_frames=1200 below10percent=0 first80ms_below90percent=80 frame_gain_jump=0.44907218
+old=false scripted_target_frames=1200 below10percent=0 first80ms_below90percent=80 frame_gain_jump=0.43959805

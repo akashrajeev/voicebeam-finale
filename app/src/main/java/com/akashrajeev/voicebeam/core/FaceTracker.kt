@@ -28,12 +28,6 @@ class FaceTracker(
 
     @Synchronized
     fun update(timeMs: Long, faces: List<FaceObservation>): List<TrackedFace> {
-        val lockedTrack = tracks.firstOrNull { it.id == lockedId }
-        if (lockedTrack != null && timeMs - lockedTrack.lastSeen > forgetAfterMs * 4) {
-            tracks.remove(lockedTrack)
-            // Retain the user's explicit target intent, not the stale face geometry.
-            // A new face cannot inherit this missing target's ID; retap or unlock is required.
-        }
         val unmatched = tracks.toMutableList()
         for (f in faces.sortedByDescending { it.box.width * it.box.height }) {
             val best = unmatched.minByOrNull { hypot(it.box.cx - f.box.cx, it.box.cy - f.box.cy) }
@@ -49,6 +43,11 @@ class FaceTracker(
             t.lips.add(timeMs, f.mouthOpenness)
         }
         tracks.removeAll { timeMs - it.lastSeen > forgetAfterMs && it.id != lockedId }
+        val lockedTrack = tracks.firstOrNull { it.id == lockedId }
+        if (lockedTrack != null && timeMs - lockedTrack.lastSeen > forgetAfterMs * 4) {
+            tracks.remove(lockedTrack)
+            lockedId = null
+        }
         return snapshot(timeMs)
     }
 
@@ -67,6 +66,23 @@ class FaceTracker(
                 ?.takeIf { hypot(it.box.cx - nx, it.box.cy - ny) < 0.25f }
         lockedId = hit?.id
         return lockedId
+    }
+
+    /** Which visible face a tap hits, without locking it. */
+    @Synchronized
+    fun faceAt(nx: Float, ny: Float, nowMs: Long): Int? {
+        val visible = tracks.filter { nowMs - it.lastSeen < 800 }
+        val hit = visible.firstOrNull { it.box.contains(nx, ny, pad = 0.04f) }
+            ?: visible.minByOrNull { hypot(it.box.cx - nx, it.box.cy - ny) }
+                ?.takeIf { hypot(it.box.cx - nx, it.box.cy - ny) < 0.25f }
+        return hit?.id
+    }
+
+    @Synchronized
+    fun lockFace(id: Int): Boolean {
+        if (tracks.none { it.id == id }) return false
+        lockedId = id
+        return true
     }
 
     @Synchronized

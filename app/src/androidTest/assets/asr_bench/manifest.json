@@ -1,0 +1,72 @@
+[
+  {
+    "id": "1089-134686-0002",
+    "scenario": "clean",
+    "wav": "1089-134686-0002.wav",
+    "reference": "AFTER EARLY NIGHTFALL THE YELLOW LAMPS WOULD LIGHT UP HERE AND THERE THE SQUALID QUARTER OF THE BROTHELS",
+    "speaker": "1089"
+  },
+  {
+    "id": "1089-134686-0013",
+    "scenario": "clean",
+    "wav": "1089-134686-0013.wav",
+    "reference": "IF EVER HE WAS IMPELLED TO CAST SIN FROM HIM AND TO REPENT THE IMPULSE THAT MOVED HIM WAS THE WISH TO BE HER KNIGHT",
+    "speaker": "1089"
+  },
+  {
+    "id": "121-121726-0008",
+    "scenario": "clean",
+    "wav": "121-121726-0008.wav",
+    "reference": "HOSE MAN'S EXCUSE FOR WETTING THE WALK",
+    "speaker": "121"
+  },
+  {
+    "id": "121-121726-0012",
+    "scenario": "clean",
+    "wav": "121-121726-0012.wav",
+    "reference": "HUSSY WOMAN AND BOND TIE",
+    "speaker": "121"
+  },
+  {
+    "id": "1221-135767-0005",
+    "scenario": "clean",
+    "wav": "1221-135767-0005.wav",
+    "reference": "IT WAS THE SCARLET LETTER IN ANOTHER FORM THE SCARLET LETTER ENDOWED WITH LIFE",
+    "speaker": "1221"
+  },
+  {
+    "id": "1221-135767-0024",
+    "scenario": "clean",
+    "wav": "1221-135767-0024.wav",
+    "reference": "PEARL SEEING THE ROSE BUSHES BEGAN TO CRY FOR A RED ROSE AND WOULD NOT BE PACIFIED",
+    "speaker": "1221"
+  },
+  {
+    "id": "1089-134686-0002-other-speaker",
+    "scenario": "other-speaker",
+    "wav": "1089-134686-0002-other-speaker.wav",
+    "reference": "AFTER EARLY NIGHTFALL THE YELLOW LAMPS WOULD LIGHT UP HERE AND THERE THE SQUALID QUARTER OF THE BROTHELS",
+    "speaker": "1089"
+  },
+  {
+    "id": "1089-134686-0002-strong-overlap",
+    "scenario": "strong-overlap",
+    "wav": "1089-134686-0002-strong-overlap.wav",
+    "reference": "AFTER EARLY NIGHTFALL THE YELLOW LAMPS WOULD LIGHT UP HERE AND THERE THE SQUALID QUARTER OF THE BROTHELS",
+    "speaker": "1089"
+  },
+  {
+    "id": "1221-135767-0005-mild-noise",
+    "scenario": "mild-noise",
+    "wav": "1221-135767-0005-mild-noise.wav",
+    "reference": "IT WAS THE SCARLET LETTER IN ANOTHER FORM THE SCARLET LETTER ENDOWED WITH LIFE",
+    "speaker": "1221"
+  },
+  {
+    "id": "1221-135767-0005-heavy-noise",
+    "scenario": "heavy-noise",
+    "wav": "1221-135767-0005-heavy-noise.wav",
+    "reference": "IT WAS THE SCARLET LETTER IN ANOTHER FORM THE SCARLET LETTER ENDOWED WITH LIFE",
+    "speaker": "1221"
+  }
+]

@@ -98,7 +98,7 @@ fun CaptionScreen(engine: VoiceBeamEngine, onBack: () -> Unit) {
                     Spacer(Modifier.height(10.dp))
                     Text(state.stageUrl ?: "Starting...", color = Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.testTag("stageUrl"))
                     Spacer(Modifier.height(10.dp))
-                    Text("Captions stay on your local network. Nothing goes to the internet.", color = Muted, fontSize = 13.sp)
+                    Text("This page is served on your local network only. If Cloud captions (Deepgram) are on in Settings, microphone audio goes to Deepgram.", color = Muted, fontSize = 13.sp)
                 }
             },
         )

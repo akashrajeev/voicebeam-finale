@@ -66,8 +66,7 @@ class NeuralVad(assets: AssetManager) {
     )
     private val window = FloatArray(512)
     private var fill = 0
-    var probability = 0f
-        private set
+    private var probability = 0f
     fun isVoice(samples: FloatArray): Boolean {
         var offset = 0
         while (offset < samples.size) {

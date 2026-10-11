@@ -33,6 +33,9 @@ fi
 # 4. Face + lip landmarks (MediaPipe Face Landmarker)
 [ -f "$ASSETS/face_landmarker.task" ] || curl -fL -o "$ASSETS/face_landmarker.task" "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 
+# 5. Hand gesture (MediaPipe Gesture Recognizer, ~8 MB), used only for the thumbs-up consent
+[ -f "$ASSETS/gesture_recognizer.task" ] || curl -fL -o "$ASSETS/gesture_recognizer.task" "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
+
 # Noisy sample for the instrumented denoiser test
 mkdir -p app/src/androidTest/assets
 [ -f app/src/androidTest/assets/noisy_speech.wav ] || curl -fL -o app/src/androidTest/assets/noisy_speech.wav "$REL/speech-enhancement-models/speech_with_noise.wav" || true

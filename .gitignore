@@ -15,7 +15,3 @@ scripts/__pycache__/
 
 .kotlin/
 keystore/
-*.jks
-*.keystore
-*.p12
-local.properties

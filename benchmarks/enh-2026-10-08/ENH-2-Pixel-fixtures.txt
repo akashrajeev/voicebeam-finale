@@ -1,0 +1,72 @@
+ENH-2 PUBLIC FIXTURE TEST; 4s, RMS=.06; synthetic equal-RMS overlap/noise; scripted lips. Not Indian voices, not Bluetooth or end-to-end latency.
+enrollment=LEARNED phases=3
+fixture=target score=1.0 embedMs=92.020793
+arm target mix=0.0 boostDb=0.0 outputGainDb=-0.32711354 scriptedFalseMute=0/249 targetCorrelation=0.08785687049688728 clipped=0 sepDenoiseP95Ms=1.706665
+arm target mix=0.0 boostDb=6.0 outputGainDb=5.5324225 scriptedFalseMute=0/249 targetCorrelation=0.08799315851197287 clipped=0 sepDenoiseP95Ms=1.652222
+arm target mix=0.0 boostDb=12.0 outputGainDb=9.432371 scriptedFalseMute=0/249 targetCorrelation=0.06409818370971769 clipped=0 sepDenoiseP95Ms=1.745036
+arm target mix=0.5 boostDb=0.0 outputGainDb=-3.8349166 scriptedFalseMute=0/249 targetCorrelation=0.6625059627919032 clipped=0 sepDenoiseP95Ms=1.836426
+arm target mix=0.5 boostDb=6.0 outputGainDb=2.1650198 scriptedFalseMute=0/249 targetCorrelation=0.6625022655219117 clipped=0 sepDenoiseP95Ms=1.81543
+arm target mix=0.5 boostDb=12.0 outputGainDb=7.861888 scriptedFalseMute=0/249 targetCorrelation=0.6591234211905715 clipped=0 sepDenoiseP95Ms=1.73588
+arm target mix=1.0 boostDb=0.0 outputGainDb=-0.5055813 scriptedFalseMute=0/249 targetCorrelation=0.9928164639948682 clipped=0 sepDenoiseP95Ms=1.831177
+arm target mix=1.0 boostDb=6.0 outputGainDb=5.3511534 scriptedFalseMute=0/249 targetCorrelation=0.9915283502368871 clipped=0 sepDenoiseP95Ms=1.793172
+arm target mix=1.0 boostDb=12.0 outputGainDb=9.282898 scriptedFalseMute=0/249 targetCorrelation=0.9558211488004058 clipped=0 sepDenoiseP95Ms=1.820638
+fixture=other score=0.0 embedMs=90.99296
+arm other mix=0.0 boostDb=0.0 outputGainDb=-16.678127 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.637573
+arm other mix=0.0 boostDb=6.0 outputGainDb=-16.678127 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.67338
+arm other mix=0.0 boostDb=12.0 outputGainDb=-16.678127 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.832113
+arm other mix=0.5 boostDb=0.0 outputGainDb=-20.346842 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.72998
+arm other mix=0.5 boostDb=6.0 outputGainDb=-20.346842 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.725627
+arm other mix=0.5 boostDb=12.0 outputGainDb=-20.346842 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.871745
+arm other mix=1.0 boostDb=0.0 outputGainDb=-18.217176 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.781739
+arm other mix=1.0 boostDb=6.0 outputGainDb=-18.217176 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.730916
+arm other mix=1.0 boostDb=12.0 outputGainDb=-18.217176 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.829671
+fixture=overlap score=0.614697 embedMs=91.304931
+arm overlap mix=0.0 boostDb=0.0 outputGainDb=0.017353173 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.586792
+arm overlap mix=0.0 boostDb=6.0 outputGainDb=0.017353173 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.635621
+arm overlap mix=0.0 boostDb=12.0 outputGainDb=0.017353173 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.721557
+arm overlap mix=0.5 boostDb=0.0 outputGainDb=-3.6014535 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.740723
+arm overlap mix=0.5 boostDb=6.0 outputGainDb=-3.6014535 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.680175
+arm overlap mix=0.5 boostDb=12.0 outputGainDb=-3.6014535 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.776204
+arm overlap mix=1.0 boostDb=0.0 outputGainDb=-1.0050671 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.624756
+arm overlap mix=1.0 boostDb=6.0 outputGainDb=-1.0050671 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.626221
+arm overlap mix=1.0 boostDb=12.0 outputGainDb=-1.0050671 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.895142
+fixture=target_noise score=1.0 embedMs=97.522258
+arm target_noise mix=0.0 boostDb=0.0 outputGainDb=-0.3393383 scriptedFalseMute=0/249 targetCorrelation=0.07842485345409497 clipped=0 sepDenoiseP95Ms=1.986531
+arm target_noise mix=0.0 boostDb=6.0 outputGainDb=5.4890957 scriptedFalseMute=0/249 targetCorrelation=0.0765364966807693 clipped=0 sepDenoiseP95Ms=1.768758
+arm target_noise mix=0.0 boostDb=12.0 outputGainDb=9.522146 scriptedFalseMute=0/249 targetCorrelation=0.05251787544633033 clipped=0 sepDenoiseP95Ms=1.831706
+arm target_noise mix=0.5 boostDb=0.0 outputGainDb=-4.4429116 scriptedFalseMute=0/249 targetCorrelation=0.5875387244869105 clipped=0 sepDenoiseP95Ms=1.917928
+arm target_noise mix=0.5 boostDb=6.0 outputGainDb=1.5570889 scriptedFalseMute=0/249 targetCorrelation=0.5875387241516705 clipped=0 sepDenoiseP95Ms=1.783528
+arm target_noise mix=0.5 boostDb=12.0 outputGainDb=7.296588 scriptedFalseMute=0/249 targetCorrelation=0.5835219585903106 clipped=0 sepDenoiseP95Ms=1.657308
+arm target_noise mix=1.0 boostDb=0.0 outputGainDb=-1.9370911 scriptedFalseMute=0/249 targetCorrelation=0.974856523057916 clipped=0 sepDenoiseP95Ms=1.706543
+arm target_noise mix=1.0 boostDb=6.0 outputGainDb=3.9895682 scriptedFalseMute=0/249 targetCorrelation=0.9742675713204897 clipped=0 sepDenoiseP95Ms=1.904622
+arm target_noise mix=1.0 boostDb=12.0 outputGainDb=8.131232 scriptedFalseMute=0/249 targetCorrelation=0.9442658077678389 clipped=0 sepDenoiseP95Ms=1.887248
+fixture=noise score=0.0 embedMs=98.874878
+arm noise mix=0.0 boostDb=0.0 outputGainDb=-19.830622 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.892863
+arm noise mix=0.0 boostDb=6.0 outputGainDb=-19.830622 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.79716
+arm noise mix=0.0 boostDb=12.0 outputGainDb=-19.830622 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.772746
+arm noise mix=0.5 boostDb=0.0 outputGainDb=-25.854643 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.789754
+arm noise mix=0.5 boostDb=6.0 outputGainDb=-25.854643 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.780518
+arm noise mix=0.5 boostDb=12.0 outputGainDb=-25.854643 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.799276
+arm noise mix=1.0 boostDb=0.0 outputGainDb=-53.093372 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.883341
+arm noise mix=1.0 boostDb=6.0 outputGainDb=-53.093372 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.73352
+arm noise mix=1.0 boostDb=12.0 outputGainDb=-53.093372 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.674316
+fixture=silence score=0.0 embedMs=93.006063
+arm silence mix=0.0 boostDb=0.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.668132
+arm silence mix=0.0 boostDb=6.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.588826
+arm silence mix=0.0 boostDb=12.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.791748
+arm silence mix=0.5 boostDb=0.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.829143
+arm silence mix=0.5 boostDb=6.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.954427
+arm silence mix=0.5 boostDb=12.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.806844
+arm silence mix=1.0 boostDb=0.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.81962
+arm silence mix=1.0 boostDb=6.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.790934
+arm silence mix=1.0 boostDb=12.0 outputGainDb=-160.0 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.836588
+fixture=target_enters score=0.54752994 embedMs=95.957479
+arm target_enters mix=0.0 boostDb=0.0 outputGainDb=-3.8229823 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.864298
+arm target_enters mix=0.0 boostDb=6.0 outputGainDb=1.9372575 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.78894
+arm target_enters mix=0.0 boostDb=12.0 outputGainDb=6.3835454 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.833456
+arm target_enters mix=0.5 boostDb=0.0 outputGainDb=-7.0285153 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.840291
+arm target_enters mix=0.5 boostDb=6.0 outputGainDb=-1.1637124 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.881062
+arm target_enters mix=0.5 boostDb=12.0 outputGainDb=4.558198 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.872681
+arm target_enters mix=1.0 boostDb=0.0 outputGainDb=-4.02082 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.747559
+arm target_enters mix=1.0 boostDb=6.0 outputGainDb=1.7768592 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.818115
+arm target_enters mix=1.0 boostDb=12.0 outputGainDb=6.2092314 scriptedFalseMute=0/249 targetCorrelation=NaN clipped=0 sepDenoiseP95Ms=1.803548

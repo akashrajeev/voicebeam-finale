@@ -1,0 +1,22 @@
+{
+  "rnnoise_commit": "70f1d256acd4b34a572f999a05c87bf00b67730d",
+  "packages": {
+    "numpy": "1.23.5",
+    "scipy": "1.15.3",
+    "torch": "2.5.1+cpu",
+    "sherpa-onnx": "1.13.8",
+    "deepfilternet": "0.5.6",
+    "pystoi": "0.4.1",
+    "pesq": "0.0.4",
+    "jiwer": "4.0.0"
+  },
+  "hashes": {
+    "/home/sandbox/voicefix/sep-host/gtcrn.onnx": "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534",
+    "/home/sandbox/voicefix/enh-compare/traffic/STRAFFIC/ch01.wav": "8fa49dcf3996af655a3ecef8d06f0d9ef217c35410e3adce3d461da797987dbb",
+    "/home/sandbox/voicefix/enh-compare/models/sherpa-onnx-moonshine-tiny-en-int8/encode.int8.onnx": "8774dfba578de027ec6595c2c654a0836434489bc963a0db124a7f181f571acb",
+    "/home/sandbox/voicefix/enh-compare/models/sherpa-onnx-moonshine-tiny-en-int8/preprocess.onnx": "f33addce61a143460fe753b5ee5b7db255e5140b5b779c065b94f6c83ff0bf4e",
+    "/home/sandbox/voicefix/enh-compare/models/sherpa-onnx-moonshine-tiny-en-int8/uncached_decode.int8.onnx": "216737000dd5881a17aa043f6bbd286add33e4c3b0ae257153e2ec15438bdc41",
+    "/home/sandbox/voicefix/enh-compare/models/sherpa-onnx-moonshine-tiny-en-int8/cached_decode.int8.onnx": "2aff28bba6a03d8dcf5c9feac45462629bae37317442299f28115ad09da773f6",
+    "/home/sandbox/.cache/DeepFilterNet/DeepFilterNet3/checkpoints/model_120.ckpt.best": "23b92884f63ccf54bb026014604625ab231657b6480df65db4095c4c171e6003"
+  }
+}

@@ -4,27 +4,20 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Label the checked-out source, not the event that requested a build.
-val sourceCommit = providers.exec {
-    commandLine("git", "rev-parse", "HEAD")
-}.standardOutput.asText.get().trim().also {
-    require(it.matches(Regex("[0-9a-f]{40}"))) { "Cannot determine checked-out source commit" }
-}
-
 android {
     namespace = "com.akashrajeev.voicebeam"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.akashrajeev.voicebeam.finale"
+        applicationId = "com.akashrajeev.voicebeam.lab"
         minSdk = 26
         targetSdk = 35
-        buildConfigField("String", "LAB_COMMIT", "\"" + sourceCommit + "\"")
-        versionCode = 108
-        versionName = "ENH-7"
+        buildConfigField("String", "LAB_COMMIT", "\"" + (System.getenv("GITHUB_SHA") ?: "local") + "\"")
+        versionCode = 106
+        versionName = "ENH-6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a")
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -46,7 +39,7 @@ android {
         debug {
             signingConfig = signingConfigs.getByName("debug")
             // Debug also carries x86_64 so the emulator tests can run it.
-            ndk { abiFilters += if (System.getenv("VB_EMULATOR") == "1") listOf("x86_64") else listOf("arm64-v8a") }
+            ndk { abiFilters += listOf("arm64-v8a") }
         }
         release {
             // R8 stays off until a minified build has been run on a device: the sherpa-onnx JNI layer
@@ -110,6 +103,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:$media3")
 
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

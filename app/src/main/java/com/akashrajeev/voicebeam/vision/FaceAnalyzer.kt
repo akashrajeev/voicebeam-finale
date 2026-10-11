@@ -27,17 +27,18 @@ import kotlin.math.hypot
 class FaceAnalyzer(
     context: Context,
     private val onFaces: (timeMs: Long, faces: List<FaceObservation>, width: Int, height: Int) -> Unit,
+    /** Gesture sampling interval in ms while consent is asked or a lock is active, or 0 when gestures are not needed. */
+    private val gestureIntervalMs: () -> Long = { 0L },
+    private val onHands: (timeMs: Long, hands: List<com.akashrajeev.voicebeam.core.HandObservation>) -> Unit = { _, _ -> },
 ) : ImageAnalysis.Analyzer {
 
     private var landmarker: FaceLandmarker? = null
     @Volatile private var lastW = 0
     @Volatile private var lastH = 0
     @Volatile private var busy = false
-    private var submittedMs = 0L
-    private var sensorNs = 0L
-    private var diagnosticAtMs = SystemClock.uptimeMillis()
-    private var processedFrames = 0
-    private var droppedFrames = 0
+
+    private val hands = HandGesture(context)
+    private var lastGestureMs = 0L
 
     init {
         landmarker = create(context, Delegate.GPU) ?: create(context, Delegate.CPU)
@@ -68,16 +69,20 @@ class FaceAnalyzer(
 
     override fun analyze(image: ImageProxy) {
         val lm = landmarker
-        if (lm == null || busy) { droppedFrames++; image.close(); return }
+        if (lm == null || busy) { image.close(); return }
         try {
             val bmp = frameBitmapFor(image)
             val rot = image.imageInfo.rotationDegrees
             val upright = if (rot != 0) rotateInto(bmp, rot) else bmp
             lastW = upright.width; lastH = upright.height
+            val gi = gestureIntervalMs()
+            val nowG = SystemClock.uptimeMillis()
+            if (gi > 0 && nowG - lastGestureMs >= gi) {
+                lastGestureMs = nowG
+                onHands(nowG, hands.recognize(upright))
+            }
             busy = true
-            submittedMs = SystemClock.uptimeMillis()
-            sensorNs = image.imageInfo.timestamp
-            lm.detectAsync(BitmapImageBuilder(upright).build(), submittedMs)
+            lm.detectAsync(BitmapImageBuilder(upright).build(), SystemClock.uptimeMillis())
         } catch (t: Throwable) {
             busy = false
             Log.w("VoiceBeamVision", "analyze failed", t)
@@ -125,40 +130,21 @@ class FaceAnalyzer(
     }
 
     private fun handle(r: FaceLandmarkerResult) {
-        try {
-            com.akashrajeev.voicebeam.core.withCallbackCleanup(cleanup = { busy = false }) {
-                val receivedMs = SystemClock.uptimeMillis()
-                val sourceMs = r.timestampMs()
-                processedFrames++
-                val faces = r.faceLandmarks().map { pts ->
-                    var minX = 1f; var minY = 1f; var maxX = 0f; var maxY = 0f
-                    for (p in pts) {
-                        minX = minOf(minX, p.x()); minY = minOf(minY, p.y())
-                        maxX = maxOf(maxX, p.x()); maxY = maxOf(maxY, p.y())
-                    }
-                    val faceH = hypot(pts[10].x() - pts[152].x(), pts[10].y() - pts[152].y()).coerceAtLeast(1e-4f)
-                    val lipGap = hypot(pts[13].x() - pts[14].x(), pts[13].y() - pts[14].y())
-                    FaceObservation(Box(minX, minY, maxX, maxY), lipGap / faceH)
-                }
-                // Preserve the MediaPipe input timestamp; old frames must not look fresh.
-                onFaces(sourceMs, faces, lastW, lastH)
-                if (receivedMs - diagnosticAtMs >= 1000L) {
-                    val elapsed = (receivedMs - diagnosticAtMs).coerceAtLeast(1)
-                    com.akashrajeev.voicebeam.engine.Diagnostics.event("vision sourceMs=" + sourceMs +
-                        " sensorNs=" + sensorNs + " receivedMs=" + receivedMs +
-                        " inferenceMs=" + (receivedMs - submittedMs) +
-                        " processedFps=" + (processedFrames * 1000f / elapsed) +
-                        " droppedFrames=" + droppedFrames + " faces=" + faces.size +
-                        " mouthOpenness=" + faces.joinToString(",") { it.mouthOpenness.toString() })
-                    diagnosticAtMs = receivedMs; processedFrames = 0; droppedFrames = 0
-                }
+        busy = false
+        val faces = r.faceLandmarks().map { pts ->
+            var minX = 1f; var minY = 1f; var maxX = 0f; var maxY = 0f
+            for (p in pts) {
+                minX = minOf(minX, p.x()); minY = minOf(minY, p.y())
+                maxX = maxOf(maxX, p.x()); maxY = maxOf(maxY, p.y())
             }
-        } catch (t: Throwable) {
-            Log.w("VoiceBeamVision", "callback failed: " + t.javaClass.simpleName)
+            val faceH = hypot(pts[10].x() - pts[152].x(), pts[10].y() - pts[152].y()).coerceAtLeast(1e-4f)
+            val lipGap = hypot(pts[13].x() - pts[14].x(), pts[13].y() - pts[14].y())
+            FaceObservation(Box(minX, minY, maxX, maxY), lipGap / faceH)
         }
+        onFaces(SystemClock.uptimeMillis(), faces, lastW, lastH)
     }
 
     val available: Boolean get() = landmarker != null
 
-    fun close() { landmarker?.close(); landmarker = null; frameBitmap = null; uprightBitmap = null }
+    fun close() { landmarker?.close(); landmarker = null; hands.close(); frameBitmap = null; uprightBitmap = null }
 }

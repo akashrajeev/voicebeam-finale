@@ -3,9 +3,9 @@ package com.akashrajeev.voicebeam.engine
 import android.content.Context
 
 data class Settings(
-    val quietOthers: Float = 0.86f,      // 0..1, how much to turn down everyone else
+    val quietOthers: Float = 0.8f,      // 0..1, how much to turn down everyone else
     val boostDb: Float = 6f,           // extra loudness in the earphones
-    val denoise: Float = .7f,            // 0..1 noise removal strength
+    val denoise: Float = .8f,            // 0..1 noise removal strength
     val useSceneMic: Boolean = true,    // point the mic at the scene (back camera side)
     val saveMode: SaveMode = SaveMode.AUDIO_VIDEO,
     val captionBurn: CaptionBurn = CaptionBurn.BURNED,
@@ -16,15 +16,18 @@ data class Settings(
     val onboarded: Boolean = false,
     val hd1080: Boolean = false,
     val debugFeed: Boolean = false,
+    val requireBothConsent: Boolean = false, // true: thumbs-up AND "I agree" within 5 s
+    val moonshineCaptions: Boolean = true,   // on-device captions (default)
+    val deepgramCaptions: Boolean = false,   // cloud captions, audio leaves the phone; off by default
 )
 
 class SettingsStore(context: Context) {
     private val p = context.getSharedPreferences("voicebeam", Context.MODE_PRIVATE)
 
     fun load(): Settings = Settings(
-        quietOthers = p.getFloat("quiet", 0.86f),
+        quietOthers = p.getFloat("quiet", 0.8f),
         boostDb = p.getFloat("boost", 6f),
-        denoise = p.getFloat("denoise", .7f),
+        denoise = p.getFloat("denoise", .8f),
         useSceneMic = p.getBoolean("sceneMic", true),
         saveMode = runCatching { SaveMode.valueOf(p.getString("saveMode", null)!!) }.getOrDefault(SaveMode.AUDIO_VIDEO),
         captionBurn = runCatching { CaptionBurn.valueOf(p.getString("burn", null)!!) }.getOrDefault(CaptionBurn.BURNED),
@@ -35,6 +38,9 @@ class SettingsStore(context: Context) {
         onboarded = p.getBoolean("onboarded", false),
         hd1080 = p.getBoolean("hd1080", false),
         debugFeed = p.getBoolean("dbgFeed", false),
+        requireBothConsent = p.getBoolean("consentBoth", false),
+        moonshineCaptions = p.getBoolean("capMoonshine", true),
+        deepgramCaptions = p.getBoolean("capDeepgram", false),
     )
 
     fun save(s: Settings) {
@@ -42,7 +48,7 @@ class SettingsStore(context: Context) {
             .putFloat("quiet", s.quietOthers).putFloat("boost", s.boostDb).putFloat("denoise", s.denoise)
             .putBoolean("sceneMic", s.useSceneMic).putString("saveMode", s.saveMode.name).putString("burn", s.captionBurn.name)
             .putBoolean("others", s.showOthersCaptions).putBoolean("raw", s.keepRawAudio).putBoolean("stage", s.stageEnabled)
-            .putInt("capSize", s.captionSize).putBoolean("onboarded", s.onboarded).putBoolean("hd1080", s.hd1080).putBoolean("dbgFeed", s.debugFeed)
+            .putInt("capSize", s.captionSize).putBoolean("onboarded", s.onboarded).putBoolean("hd1080", s.hd1080).putBoolean("dbgFeed", s.debugFeed).putBoolean("consentBoth", s.requireBothConsent).putBoolean("capMoonshine", s.moonshineCaptions).putBoolean("capDeepgram", s.deepgramCaptions)
             .apply()
     }
 }
