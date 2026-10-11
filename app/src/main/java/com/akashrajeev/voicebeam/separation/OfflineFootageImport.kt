@@ -136,7 +136,7 @@ object OfflineFootageImport {
             } finally { try { rawVp?.release() } catch (_: Throwable) {} }
 
             if (plan is PlanResult.Abstain) {
-                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, plan.reason, dir, diag.toString() + "stage=plan")
+                return@withContext fallbackOrAsk(context, uri, tapStart, tapEnd, plan.reason, dir, diag.toString() + "stage=plan" + (if (plan.detail.isEmpty()) "" else "; " + plan.detail))
             }
             plan as PlanResult.Plan
 
