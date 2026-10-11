@@ -25,15 +25,15 @@ object OfflineFaceFeed {
     fun analyze(context: Context, uri: Uri, fps: Int = 8, isCancelled: () -> Boolean = { false }): Result? {
         require(fps >= 8) { "LipActivity needs at least 8 fps" }
         val retriever = MediaMetadataRetriever()
-        var proc: FaceProcessor? = null
+        var proc: TiledFaceDetector? = null
         try {
             retriever.setDataSource(context, uri)
             val durMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.takeIf { it > 0 } ?: return null
             val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
             val binner = FaceTrackBinner(durMs / 1000f)
-            val processor = FaceProcessor(context, FaceSink { t, faces, _, _ -> binner.add(t, faces) })
-            proc = processor
-            if (!processor.available || processor.usingFallback) return null
+            val detector = TiledFaceDetector(context)
+            proc = detector
+            if (!detector.available) return null
             val stepMs = 1000L / fps
             var analysed = 0
             var t = 0L
@@ -47,7 +47,7 @@ object OfflineFaceFeed {
                 }
                 if (frame != null) {
                     val upright = rotateUpright(frame, rotation)
-                    processor.processAtBlocking(upright, t)
+                    binner.add(t, detector.faces(upright))
                     analysed++
                     if (upright !== frame) frame.recycle()
                     upright.recycle()
@@ -55,6 +55,7 @@ object OfflineFaceFeed {
                 t += stepMs
             }
             if (analysed == 0) return null
+            Log.i("VoiceBeamVision", "faces: tiled ${detector.tiledFrames}/${detector.totalFrames} frames")
             return Result(durMs / 1000f, analysed, binner)
         } catch (e: Throwable) {
             Log.w("VoiceBeamVision", "offline face feed failed", e)
