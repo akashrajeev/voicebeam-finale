@@ -2,25 +2,34 @@ package com.akashrajeev.voicebeam.separation
 
 import android.content.Context
 import com.akashrajeev.voicebeam.core.ExtractionSafety
+import com.akashrajeev.voicebeam.core.ReferenceGuardReport
 import com.akashrajeev.voicebeam.core.FinalAudioGuardMath
 import com.akashrajeev.voicebeam.core.VoiceMatch
 import com.akashrajeev.voicebeam.ml.VoicePrint
 
 /** Checks waveform reference and speaker retention; scores are heuristics, not guarantees. */
 object OfflineQualityGuard {
-    fun reference(context: Context, ref: FloatArray): Boolean {
-        if(ref.size<32000)return false
+    /** Same checks as before; returns what was measured so the UI can name the real cause. */
+    fun referenceReport(context: Context, ref: FloatArray): ReferenceGuardReport {
+        val secs = ref.size / 16000f
+        if(ref.size<32000)return ReferenceGuardReport(secs, Float.NaN, Float.NaN)
         val mask=OfflineSpeechMask.compute(context,ref)
+        val coverage=mask.count{it}.toFloat()/mask.size
         val embed=VoicePrint(context.assets)
         try {
             val half=ref.size/2
-            val a=embed.embed(ref.copyOfRange(0,half))?:return false
-            val b=embed.embed(ref.copyOfRange(half,ref.size))?:return false
-            val coverage=mask.count{it}.toFloat()/mask.size
+            val a=embed.embed(ref.copyOfRange(0,half))
+            val b=embed.embed(ref.copyOfRange(half,ref.size))
+            if(a==null||b==null)return ReferenceGuardReport(secs, coverage, Float.NaN, embedFailed=true)
             val cosine=VoiceMatch.cosine(a,b)
             android.util.Log.i("OfflineGuard", "reference coverage=$coverage splitCosine=$cosine")
-            return ExtractionSafety.referenceTrusted(coverage,cosine)
+            return ReferenceGuardReport(secs, coverage, cosine)
         } finally {embed.release()}
+    }
+    fun reference(context: Context, ref: FloatArray): Boolean {
+        val r=referenceReport(context,ref)
+        // Pass/fail stays ExtractionSafety.referenceTrusted; the report mirrors it (pinned by a test).
+        return r.trusted && ExtractionSafety.referenceTrusted(r.coverage,r.splitCosine)
     }
     fun output(context: Context, source: FloatArray, extracted: FloatArray, ref: FloatArray, speech: BooleanArray): Boolean {
         val embed=VoicePrint(context.assets)
