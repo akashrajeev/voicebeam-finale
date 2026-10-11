@@ -204,6 +204,30 @@ fun OfflineVideoPanel(
                     Text(tap.message)
                     Row { Checkbox(confirmed,{confirmed=it},enabled=!busy,modifier=Modifier.testTag("confirmSuggestedMoment")); Text("I checked this moment: only my target speaks") }
                 } else if(!tap.canStart) Text(tap.message)
+                val enrolledTpl=remember { com.akashrajeev.voicebeam.engine.EnrolledVoiceStore.load(context) }
+                if(enrolledTpl!=null) {
+                    Text("Voice learned in Listen is saved on this phone. Use it as the reference (no clean solo moment needed). A typed moment is only the fallback.",color=Muted,style=MaterialTheme.typography.bodySmall)
+                    Button(onClick={
+                        val a0=start.toDoubleOrNull(); val b0=end.toDoubleOrNull()
+                        val tapOk=a0!=null && b0!=null && a0.isFinite() && b0.isFinite() && a0>=0 && b0-a0 in 3.0..10.0 && (!usedProposal || confirmed)
+                        scanJob?.cancel(); proposeJob?.cancel(); scanning=false; proposing=false
+                        val fd=feed; val tid=tapId
+                        val faceVis: ((Array<FootageAnalysis.Seg>) -> BooleanArray?)? =
+                            if(fd!=null && tid!=null) { labels -> fd.binner.visibleWithAliases(tid,labels).visible } else null
+                        busy=true; result=""
+                        importJob=scope.launch {
+                            try {
+                                when(val r=OfflineFootageImport.run(context,it,if(tapOk) a0 else null,if(tapOk) b0 else null,faceVisibility=faceVis,enrolled=enrolledTpl)) {
+                                    is FootageResult.Done -> { val fallback=java.io.File(r.meta.dir,"offline-fallback.txt"); result=if(fallback.exists()) "Original kept unchanged. " + fallback.readText() else "Video ready. Tap the session below, then Original and Play video to compare. Isolation is not guaranteed."; closeDialog(); onImported() }
+                                    is FootageResult.NeedsTap -> result="Original kept unchanged. The enrolled voice was not confidently found in this clip (" + r.reason.name + "). Type a 3-10 second moment where only the target speaks and use Isolate offline."
+                                }
+                            }
+                            catch(e:CancellationException) { throw e }
+                            catch(e:Exception) { result=e.message ?: "Import failed; original unchanged" }
+                            finally { busy=false }
+                        }
+                    },enabled=!busy && !scanning && !proposing && allowed,modifier=Modifier.testTag("runEnrolledIsolation")) { Text("Isolate with enrolled voice") }
+                }
                 if(busy) { CircularProgressIndicator(); Text("Working locally. Up to 3 minutes. Keep this screen open.") }
                 if(result.isNotBlank()) Text(result)
             } },
