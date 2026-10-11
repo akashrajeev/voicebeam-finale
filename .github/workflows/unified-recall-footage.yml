@@ -1,6 +1,6 @@
 name: Unified Recall and footage port validation
 # Targeted Listen gate tuning with Recall denoiser retained
-# Re-run trigger: build B face/voice cross-check and gap fill
+# Re-run trigger: build C crowd-clip fallback + manual window
 on:
   push:
     branches: [unified-2026-10-11]
